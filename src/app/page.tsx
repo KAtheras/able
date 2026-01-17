@@ -1,65 +1,3233 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+import { pdf } from "@react-pdf/renderer";
+import ReactECharts from "echarts-for-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+
+import { ReportPdf, type ReportPdfProps } from "../pdf";
+import annualContributionLimits from "../data/annualContributionLimits.json";
+import { fplYears, getFplForState, latestFplYear } from "../lib/fpl";
+import {
+  availableStateCodes,
+  getStatePlanInfo,
+} from "../lib/stateTax";
+import { getThemeForClient, themeToCssVars } from "../lib/theme";
+import { uiPreviewCopy, type UiPreviewLanguage } from "../data/copy";
+import type {
+  CalculationInput,
+  CalculationResult,
+} from "../types/calculations";
+
+const cadenceOptions = ["monthly", "annual"] as const;
+const filingStatusValues = [
+  "single",
+  "married_joint",
+  "married_separate",
+  "head_of_household",
+] as const;
+const ssiBalanceLimit = 100000;
+
+function parseNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clampMonth(month: number) {
+  return Math.min(12, Math.max(1, month));
+}
+
+function getAnnualContributionLimit(year: number) {
+  const entry = (annualContributionLimits as { year: number; limit: number }[]).find(
+    (item) => item.year === year,
+  );
+  return entry?.limit ?? annualContributionLimits[0]?.limit ?? 20000;
+}
+
+function getPlanStateCodeForClient(clientId: string) {
+  if (clientId === "state-ca") {
+    return "CA";
+  }
+  if (clientId === "state-tx") {
+    return "TX";
+  }
+  if (clientId === "state-il") {
+    return "IL";
+  }
+  if (clientId === "state-ut") {
+    return "UT";
+  }
+  return null;
+}
+
+function describeArc(
+  cx: number,
+  cy: number,
+  r: number,
+  startAngle: number,
+  endAngle: number,
+) {
+  const toRadians = (deg: number) => (deg * Math.PI) / 180;
+  const start = toRadians(startAngle);
+  const end = toRadians(endAngle);
+  const x1 = cx + r * Math.cos(start);
+  const y1 = cy + r * Math.sin(start);
+  const x2 = cx + r * Math.cos(end);
+  const y2 = cy + r * Math.sin(end);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+}
+
+function calculateMonthlyIrr(cashflows: number[]) {
+  const hasInflow = cashflows.some((value) => value > 0);
+  const hasOutflow = cashflows.some((value) => value < 0);
+  if (!hasInflow || !hasOutflow) {
+    return 0;
+  }
+  const npv = (rate: number) => {
+    if (rate <= -0.999) {
+      return Number.NaN;
+    }
+    let total = 0;
+    for (let i = 0; i < cashflows.length; i += 1) {
+      total += cashflows[i] / Math.pow(1 + rate, i);
+    }
+    return total;
+  };
+  const candidateBounds: Array<[number, number]> = [
+    [-0.5, 0.5],
+    [-0.5, 1],
+    [-0.5, 2],
+    [-0.5, 5],
+    [-0.5, 10],
+    [-0.9, 10],
+  ];
+  let lower = -0.5;
+  let upper = 0.5;
+  let lowerValue = npv(lower);
+  let upperValue = npv(upper);
+  let hasBracket = false;
+  for (const [candidateLower, candidateUpper] of candidateBounds) {
+    const candidateLowerValue = npv(candidateLower);
+    const candidateUpperValue = npv(candidateUpper);
+    if (
+      Number.isFinite(candidateLowerValue) &&
+      Number.isFinite(candidateUpperValue) &&
+      candidateLowerValue * candidateUpperValue <= 0
+    ) {
+      lower = candidateLower;
+      upper = candidateUpper;
+      lowerValue = candidateLowerValue;
+      upperValue = candidateUpperValue;
+      hasBracket = true;
+      break;
+    }
+  }
+  if (!hasBracket) {
+    return 0;
+  }
+  if (lowerValue === 0) {
+    return lower;
+  }
+  if (upperValue === 0) {
+    return upper;
+  }
+  for (let i = 0; i < 100; i += 1) {
+    const mid = (lower + upper) / 2;
+    const midValue = npv(mid);
+    if (Math.abs(midValue) < 1e-7) {
+      return mid;
+    }
+    if (lowerValue * midValue < 0) {
+      upper = mid;
+      upperValue = midValue;
+    } else {
+      lower = mid;
+      lowerValue = midValue;
+    }
+  }
+  return (lower + upper) / 2;
+}
+
+
+export default function UiPreviewPage() {
+  const [step, setStep] = useState(0);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState("state-il");
+  const [language, setLanguage] = useState<UiPreviewLanguage>("en");
+  const [residencyOverride, setResidencyOverride] = useState(false);
+
+  const [beneficiaryName, setBeneficiaryName] = useState("");
+  const [isSsiBeneficiary, setIsSsiBeneficiary] = useState(false);
+  const [filingStatus, setFilingStatus] = useState("single");
+  const [accountAGI, setAccountAGI] = useState("");
+  const [stateCode, setStateCode] = useState(
+    () =>
+      getPlanStateCodeForClient(selectedClientId) ??
+      availableStateCodes[0] ??
+      "",
+  );
+  const [annualReturnOverride, setAnnualReturnOverride] = useState("6.00");
+  const [timeHorizonYears, setTimeHorizonYears] = useState("2");
+
+  const [startingBalance, setStartingBalance] = useState("0");
+  const [beneficiaryUpfrontContribution, setBeneficiaryUpfrontContribution] =
+    useState("0");
+  const [beneficiaryRecurringContribution, setBeneficiaryRecurringContribution] =
+    useState("0");
+  const [beneficiaryRecurringCadence, setBeneficiaryRecurringCadence] = useState<
+    (typeof cadenceOptions)[number]
+  >("monthly");
+
+  const [workToAbleDecision, setWorkToAbleDecision] = useState<
+    "undecided" | "yes" | "no"
+  >("undecided");
+  const [workToAbleHasEarnedIncome, setWorkToAbleHasEarnedIncome] =
+    useState<boolean | null>(null);
+  const [workToAbleHasEmployerPlan, setWorkToAbleHasEmployerPlan] =
+    useState<boolean | null>(null);
+  const [workToAbleEarnedIncome, setWorkToAbleEarnedIncome] = useState("0");
+  const [workToAbleYear, setWorkToAbleYear] = useState(latestFplYear);
+  const [workToAbleStateCode, setWorkToAbleStateCode] = useState(stateCode);
+
+  const [monthlyWithdrawalAmount, setMonthlyWithdrawalAmount] = useState("0");
+  const [monthlyWithdrawalStartMonth, setMonthlyWithdrawalStartMonth] =
+    useState("01");
+  const [monthlyWithdrawalStartYear, setMonthlyWithdrawalStartYear] =
+    useState(new Date().getFullYear().toString());
+  const [showMonthlyWithdrawalPicker, setShowMonthlyWithdrawalPicker] =
+    useState(false);
+  const [withdrawalPlanDecision, setWithdrawalPlanDecision] = useState(true);
+  const [showFscEligibility, setShowFscEligibility] = useState(false);
+  const [fscOutcome, setFscOutcome] = useState<"eligible" | "ineligible" | null>(
+    null,
+  );
+  const [ssiLimitDecision, setSsiLimitDecision] = useState<
+    "yes" | "no" | null
+  >(null);
+  const [workToAbleTestLocked, setWorkToAbleTestLocked] = useState(false);
+  const [fscHasTaxLiability, setFscHasTaxLiability] =
+    useState<boolean | null>(null);
+  const [fscIsOver18, setFscIsOver18] = useState<boolean | null>(null);
+  const [fscIsStudent, setFscIsStudent] = useState<boolean | null>(null);
+  const [fscIsDependent, setFscIsDependent] = useState<boolean | null>(null);
+  const [selectedHorizon, setSelectedHorizon] = useState<number | "max">("max");
+  const [showAnnualReturns, setShowAnnualReturns] = useState(false);
+  const [rightCardView, setRightCardView] = useState<"charts" | "tables">(
+    "charts",
+  );
+
+  const copy = uiPreviewCopy[language];
+  const steps = copy.steps;
+  const monthNames = copy.monthNamesShort;
+  const filingStatusOptions = filingStatusValues.map((value) => ({
+    value,
+    label: copy.filingStatusLabels[value],
+  }));
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
+  const monthWheelRef = useRef<HTMLDivElement | null>(null);
+  const yearWheelRef = useRef<HTMLDivElement | null>(null);
+  const monthlyPickerRef = useRef<HTMLDivElement | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [hasHydrated] = useState(true);
+
+  const themeVars = useMemo(() => {
+    const theme = getThemeForClient(selectedClientId);
+    return themeToCssVars(theme);
+  }, [selectedClientId]);
+  const taxBenefitsAccent =
+    selectedClientId === "state-il" ? "#F38B57" : "var(--theme-accent)";
+  const chartAccentColor =
+    (themeVars["--theme-accent"] as string | undefined) ?? "#2E8BC0";
+  const planStateCode = getPlanStateCodeForClient(selectedClientId);
+  const planMaxBalance = planStateCode
+    ? getStatePlanInfo(planStateCode).maxAccountBalance ?? null
+    : null;
+  const planStateName = planStateCode
+    ? getStatePlanInfo(planStateCode).name
+    : null;
+
+  const currentStep = steps[step];
+  const currentYear = new Date().getFullYear();
+  const currentMonthIndex = new Date().getMonth();
+  const remainingMonthsInYear = 12 - currentMonthIndex;
+  const annualLimit = getAnnualContributionLimit(currentYear);
+  const horizonYears = Math.min(
+    50,
+    Math.max(0, Math.round(parseNumber(timeHorizonYears))),
+  );
+  const minWithdrawalYear = currentYear;
+  const maxWithdrawalYear = currentYear + horizonYears;
+  const beneficiaryUpfrontAmount = parseNumber(beneficiaryUpfrontContribution);
+  const beneficiaryRecurringAmount = parseNumber(
+    beneficiaryRecurringContribution,
+  );
+  const beneficiaryAnnualRecurring =
+    beneficiaryRecurringCadence === "monthly"
+      ? beneficiaryRecurringAmount * 12
+      : beneficiaryRecurringAmount;
+  const currentYearRecurring =
+    beneficiaryRecurringCadence === "monthly"
+      ? beneficiaryRecurringAmount * remainingMonthsInYear
+      : beneficiaryRecurringAmount;
+  const currentYearContributionTotal =
+    beneficiaryUpfrontAmount + currentYearRecurring;
+  const nextFullYearContributionTotal = beneficiaryAnnualRecurring;
+
+  const workToAbleFplEntry = getFplForState(
+    workToAbleStateCode || stateCode,
+    workToAbleYear,
+  );
+  const workToAbleIncomeAmount = parseNumber(workToAbleEarnedIncome);
+  const workToAbleEligible =
+    workToAbleHasEarnedIncome === true &&
+    workToAbleHasEmployerPlan === false &&
+    workToAbleIncomeAmount > 0 &&
+    Boolean(workToAbleFplEntry);
+  const workToAbleEligibilityAnswered =
+    workToAbleHasEarnedIncome === false ||
+    (workToAbleHasEarnedIncome === true &&
+      workToAbleHasEmployerPlan !== null);
+  const workToAbleTestFinalized =
+    workToAbleDecision === "yes" && workToAbleEligibilityAnswered;
+  const workToAbleAdditionalContribution =
+    workToAbleEligible && workToAbleFplEntry
+      ? Math.min(workToAbleIncomeAmount, workToAbleFplEntry.amount)
+      : 0;
+  const combinedLimit = annualLimit + workToAbleAdditionalContribution;
+  const currentYearOverAnnualLimit = currentYearContributionTotal > annualLimit;
+  const nextFullYearOverAnnualLimit = nextFullYearContributionTotal > annualLimit;
+  const exceedsLimit = currentYearOverAnnualLimit || nextFullYearOverAnnualLimit;
+  const currentYearOverCombinedLimit =
+    currentYearContributionTotal > combinedLimit;
+  const nextFullYearOverCombinedLimit =
+    nextFullYearContributionTotal > combinedLimit;
+  const exceedsCombinedLimit =
+    currentYearOverCombinedLimit || nextFullYearOverCombinedLimit;
+  const annualOverage = currentYearOverAnnualLimit
+    ? currentYearContributionTotal - annualLimit
+    : nextFullYearOverAnnualLimit
+      ? nextFullYearContributionTotal - annualLimit
+      : 0;
+  const annualOveragePeriod = currentYearOverAnnualLimit
+    ? "current"
+    : nextFullYearOverAnnualLimit
+      ? "full"
+      : null;
+  const combinedOverage = currentYearOverCombinedLimit
+    ? currentYearContributionTotal - combinedLimit
+    : nextFullYearOverCombinedLimit
+      ? nextFullYearContributionTotal - combinedLimit
+      : 0;
+  const combinedOveragePeriod = currentYearOverCombinedLimit
+    ? "current"
+    : nextFullYearOverCombinedLimit
+      ? "full"
+      : null;
+  const workToAbleOverLimit = workToAbleEligible && exceedsCombinedLimit;
+  const workToAbleNotEligible = workToAbleTestFinalized && !workToAbleEligible;
+  const amountOverCombinedLimit = Math.max(0, combinedOverage);
+  const amountOverAnnualLimit = Math.max(0, annualOverage);
+  const showWorkToAblePrompt =
+    exceedsLimit &&
+    exceedsCombinedLimit &&
+    workToAbleDecision === "undecided" &&
+    !workToAbleTestLocked;
+  const workToAbleTestCompleted =
+    !showWorkToAblePrompt ||
+    workToAbleDecision === "no" ||
+    (workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
+  const contributionLimitResolved =
+    !exceedsCombinedLimit ||
+    workToAbleDecision === "no" ||
+    (workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
+
+  useEffect(() => {
+    if (!exceedsCombinedLimit && !workToAbleTestLocked) {
+      setWorkToAbleDecision("undecided");
+    }
+  }, [exceedsCombinedLimit, workToAbleTestLocked]);
+
+  useEffect(() => {
+    if (!workToAbleHasEarnedIncome || workToAbleIncomeAmount <= 0) {
+      setWorkToAbleHasEmployerPlan(null);
+    }
+  }, [workToAbleHasEarnedIncome, workToAbleIncomeAmount]);
+
+  useEffect(() => {
+    if (workToAbleDecision === "no") {
+      setWorkToAbleTestLocked(true);
+      return;
+    }
+    if (workToAbleDecision === "yes" && workToAbleEligibilityAnswered) {
+      setWorkToAbleTestLocked(true);
+    }
+  }, [workToAbleDecision, workToAbleEligibilityAnswered]);
+
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(copy.locale, {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 2,
+      }),
+    [copy.locale],
+  );
+  const currencyFormatterWhole = useMemo(
+    () =>
+      new Intl.NumberFormat(copy.locale, {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }),
+    [copy.locale],
+  );
+  const percentFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(copy.locale, {
+        style: "percent",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    [copy.locale],
+  );
+  const percentFormatterWhole = useMemo(
+    () =>
+      new Intl.NumberFormat(copy.locale, {
+        style: "percent",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }),
+    [copy.locale],
+  );
+  const wholeNumberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(copy.locale, {
+        maximumFractionDigits: 0,
+      }),
+    [copy.locale],
+  );
+
+  const formatContributionValue = (value: number) => {
+    const fixed = Number.isFinite(value) ? value.toFixed(2) : "0";
+    return fixed.replace(/\.00$/, "");
+  };
+
+  const pdfFootnotes = useMemo(() => copy.misc.pdfFootnotes, [copy.misc.pdfFootnotes]);
+  const pdfDisclosures = useMemo(
+    () => copy.misc.pdfDisclosures,
+    [copy.misc.pdfDisclosures],
+  );
+
+
+  const monthlyWithdrawalMonths = copy.monthNamesLong.map((label, index) => ({
+    value: String(index + 1).padStart(2, "0"),
+    label,
+  }));
+  const monthlyWithdrawalYears = Array.from(
+    { length: Math.max(1, horizonYears + 1) },
+    (_, index) => String(currentYear + index),
+  );
+  const monthlyWithdrawalMonthLabel =
+    monthlyWithdrawalMonths.find(
+      (month) => month.value === monthlyWithdrawalStartMonth,
+    )?.label ?? copy.selectMonthPlaceholder;
+
+  useEffect(() => {
+    const parsed = Number.parseInt(monthlyWithdrawalStartYear, 10);
+    const baseYear = Number.isNaN(parsed) ? currentYear : parsed;
+    const bounded = Math.min(
+      maxWithdrawalYear,
+      Math.max(minWithdrawalYear, baseYear),
+    );
+    if (String(bounded) !== monthlyWithdrawalStartYear) {
+      setMonthlyWithdrawalStartYear(String(bounded));
+    }
+  }, [
+    monthlyWithdrawalStartYear,
+    currentYear,
+    maxWithdrawalYear,
+    minWithdrawalYear,
+  ]);
+
+  useEffect(() => {
+    const horizon = Math.min(50, Math.max(1, parseNumber(timeHorizonYears)));
+    if (Number.isFinite(horizon) && horizon <= 3) {
+      setAnnualReturnOverride("4.00");
+      return;
+    }
+    setAnnualReturnOverride("6.00");
+  }, [timeHorizonYears]);
+
+  const [calcData, setCalcData] = useState<CalculationResult | null>(null);
+  const [calcError, setCalcError] = useState<string | null>(null);
+
+  const fscButtonStyle = (outcome: "eligible" | "ineligible" | null) => {
+    if (outcome === "eligible") {
+      return {
+        backgroundColor: "#059669",
+        borderColor: "#047857",
+        color: "#ffffff",
+      };
+    }
+    if (outcome === "ineligible") {
+      return {
+        backgroundColor: "#e11d48",
+        borderColor: "#be123c",
+        color: "#ffffff",
+      };
+    }
+    return undefined;
+  };
+
+  const fscEligibleCriteriaMet =
+    fscHasTaxLiability === true &&
+    fscIsOver18 === true &&
+    fscIsStudent === false &&
+    fscIsDependent === false;
+  const fscDisqualifyingMessage = (() => {
+    if (fscHasTaxLiability === false) {
+      return copy.federalSavers.disqualifyingMessages.noTaxLiability;
+    }
+    if (fscIsOver18 === false) {
+      return copy.federalSavers.disqualifyingMessages.under18;
+    }
+    if (fscIsStudent === true) {
+      return copy.federalSavers.disqualifyingMessages.student;
+    }
+    if (fscIsDependent === true) {
+      return copy.federalSavers.disqualifyingMessages.dependent;
+    }
+    return null;
+  })();
+  const fscEffectiveFilingStatus = filingStatus;
+  const fscEffectiveAgi = parseNumber(accountAGI);
+  const fscHasAgi = fscEffectiveAgi > 0;
+
+  const calcInput = useMemo<CalculationInput>(
+    () => ({
+      startingBalance,
+      beneficiaryUpfrontContribution,
+      beneficiaryRecurringContribution,
+      beneficiaryRecurringCadence,
+      monthlyWithdrawalAmount,
+      monthlyWithdrawalStartMonth,
+      monthlyWithdrawalStartYear,
+      withdrawalPlanDecision,
+      annualReturnOverride,
+      timeHorizonYears,
+      currentYear,
+      planMaxBalance,
+      isSsiBeneficiary,
+      filingStatus,
+      accountAGI,
+      stateCode,
+      fscEffectiveFilingStatus,
+      fscEffectiveAgi,
+      fscEligibleCriteriaMet,
+    }),
+    [
+      startingBalance,
+      beneficiaryUpfrontContribution,
+      beneficiaryRecurringContribution,
+      beneficiaryRecurringCadence,
+      monthlyWithdrawalAmount,
+      monthlyWithdrawalStartMonth,
+      monthlyWithdrawalStartYear,
+      withdrawalPlanDecision,
+      annualReturnOverride,
+      timeHorizonYears,
+      currentYear,
+      planMaxBalance,
+      isSsiBeneficiary,
+      filingStatus,
+      accountAGI,
+      stateCode,
+      fscEffectiveFilingStatus,
+      fscEffectiveAgi,
+      fscEligibleCriteriaMet,
+    ],
+  );
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+    const runCalculation = async () => {
+      try {
+        setCalcError(null);
+        const response = await fetch("/api/calculate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(calcInput),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(
+            message || `Calculation failed (${response.status})`,
+          );
+        }
+        const payload = (await response.json()) as CalculationResult;
+        if (isActive) {
+          setCalcData(payload);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && isActive) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Unable to calculate results.";
+          setCalcError(message);
+        }
+      }
+    };
+    runCalculation();
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [calcInput]);
+
+  const taxAwareSchedule = calcData?.taxAwareSchedule ?? [];
+  const ssiExceedRow = calcData?.ssiExceedRow ?? null;
+  const planMaxStopRow = calcData?.planMaxStopRow ?? null;
+  const fscCreditRate = calcData?.fscCreditRate ?? 0;
+  const fscEligibleForCredit = calcData?.fscEligibleForCredit ?? false;
+
+  const fscResultMessage = (() => {
+    if (fscDisqualifyingMessage) {
+      return fscDisqualifyingMessage;
+    }
+    if (!fscEligibleCriteriaMet) {
+      return copy.federalSavers.resultMessages.answerQuestions;
+    }
+    if (!fscHasAgi) {
+      return copy.federalSavers.resultMessages.enterAgi;
+    }
+    if (!calcData) {
+      return copy.federalSavers.resultMessages.answerQuestions;
+    }
+    if (fscCreditRate > 0) {
+      return copy.federalSavers.resultMessages.eligible;
+    }
+    return copy.federalSavers.resultMessages.ineligible;
+  })();
+  const fscShowResult =
+    fscDisqualifyingMessage !== null || fscEligibleCriteriaMet;
+  const fscOutcomeResolved =
+    fscDisqualifyingMessage !== null ||
+    (fscEligibleCriteriaMet && fscHasAgi && fscHasTaxLiability !== null);
+  const fscHasMissingInputs =
+    fscHasTaxLiability === null ||
+    fscIsOver18 === null ||
+    fscIsStudent === null ||
+    fscIsDependent === null ||
+    fscEffectiveAgi <= 0;
+
+  const runFscEligibilityCheck = () => {
+    if (fscHasMissingInputs) {
+      setFscOutcome("ineligible");
+      setShowFscEligibility(false);
+      return;
+    }
+    if (fscEligibleForCredit) {
+      setFscOutcome("eligible");
+      setShowFscEligibility(false);
+      return;
+    }
+    if (fscOutcomeResolved && !fscEligibleForCredit) {
+      setFscOutcome("ineligible");
+      setShowFscEligibility(false);
+    }
+  };
+
+  useEffect(() => {
+    if (fscOutcome === null) {
+      return;
+    }
+    if (fscHasMissingInputs) {
+      setFscOutcome("ineligible");
+      return;
+    }
+    if (fscOutcomeResolved) {
+      setFscOutcome(fscEligibleForCredit ? "eligible" : "ineligible");
+    }
+  }, [
+    fscEligibleForCredit,
+    fscHasMissingInputs,
+    fscOutcome,
+    fscOutcomeResolved,
+  ]);
+
+  const maxProjectedBalance = useMemo(() => {
+    return taxAwareSchedule.reduce((max, row) => {
+      return Math.max(max, row.endingBalance);
+    }, 0);
+  }, [taxAwareSchedule]);
+
+  const beneficiaryStateCode = stateCode;
+  const residencyMismatch =
+    Boolean(planStateCode) && beneficiaryStateCode !== planStateCode;
+  const residencyWarningMessage = (() => {
+    if (!hasHydrated || !residencyMismatch || !planStateName) {
+      return null;
+    }
+    const planInfo = getStatePlanInfo(planStateCode as string);
+    return planInfo.residencyRequired
+      ? copy.residency.restrictedMessage(planStateName)
+      : copy.residency.openMessage;
+  })();
+
+  useEffect(() => {
+    setResidencyOverride(false);
+  }, [beneficiaryStateCode, planStateCode]);
+  const planMaxStopLabel = planMaxStopRow
+    ? `${copy.monthNamesLong[planMaxStopRow.month - 1]} ${planMaxStopRow.year}`
+    : null;
+  const ssiExceedLabel = ssiExceedRow
+    ? `${copy.monthNamesLong[ssiExceedRow.month - 1]} ${ssiExceedRow.year}`
+    : null;
+  const showSsiPrompt = Boolean(isSsiBeneficiary && ssiExceedRow);
+  const showPlanMaxStopMessage = Boolean(
+    !showSsiPrompt &&
+      planMaxBalance != null &&
+      planMaxStopRow &&
+      planMaxStopLabel &&
+      workToAbleTestCompleted,
+  );
+  const applyMaxAllowedContribution = (limit: number) => {
+    if (limit <= 0) {
+      setBeneficiaryUpfrontContribution("0");
+      setBeneficiaryRecurringContribution("0");
+      return;
+    }
+    let nextRecurring = beneficiaryRecurringAmount;
+    if (beneficiaryAnnualRecurring > limit) {
+      const maxRecurring =
+        beneficiaryRecurringCadence === "monthly" ? limit / 12 : limit;
+      const roundedDown = Math.floor(Math.max(0, maxRecurring) * 100) / 100;
+      nextRecurring = roundedDown;
+      setBeneficiaryRecurringContribution(formatContributionValue(roundedDown));
+    }
+    const nextCurrentYearRecurring =
+      beneficiaryRecurringCadence === "monthly"
+        ? nextRecurring * remainingMonthsInYear
+        : nextRecurring;
+    const currentYearTotal = beneficiaryUpfrontAmount + nextCurrentYearRecurring;
+    if (currentYearTotal > limit) {
+      const adjustedUpfront = Math.max(0, limit - nextCurrentYearRecurring);
+      const roundedUpfront = Math.floor(adjustedUpfront * 100) / 100;
+      setBeneficiaryUpfrontContribution(formatContributionValue(roundedUpfront));
+    }
+  };
+  const getApplyMaxNote = (limit: number) => {
+    if (beneficiaryAnnualRecurring > limit) {
+      return copy.workToAble.applyMaxNoteMonthlyFirst;
+    }
+    if (currentYearContributionTotal > limit) {
+      return copy.workToAble.applyMaxNoteUpfront(
+        currencyFormatter.format(limit),
+      );
+    }
+    return null;
+  };
+  const getOveragePeriodNote = (period: "current" | "full" | null) => {
+    if (period === "current") {
+      return copy.workToAble.overagePeriodCurrentYear;
+    }
+    if (period === "full") {
+      return copy.workToAble.overagePeriodNextFullYear;
+    }
+    return null;
+  };
+  const disableNextForLimit = step === 1 && exceedsCombinedLimit;
+  const disableNextForWarning = false;
+  const disableNextForResidency =
+    step === 0 && residencyMismatch && !residencyOverride;
+  const disableNextForAgi =
+    step === 0 && parseNumber(accountAGI) <= 0;
+  const disableNextForContribution =
+    step === 1 &&
+    beneficiaryUpfrontAmount <= 0 &&
+    beneficiaryRecurringAmount <= 0;
+  const disableNext =
+    disableNextForLimit ||
+    disableNextForWarning ||
+    disableNextForResidency ||
+    disableNextForAgi ||
+    disableNextForContribution;
+
+
+  const startYear = taxAwareSchedule[0]?.year ?? currentYear;
+  const totalYearsInSchedule =
+    taxAwareSchedule.length > 0
+      ? taxAwareSchedule[taxAwareSchedule.length - 1].year - startYear + 1
+      : 0;
+
+  const filteredScheduleRows = useMemo(() => {
+    if (selectedHorizon === "max") {
+      return taxAwareSchedule;
+    }
+    const horizonMonths = Math.min(
+      taxAwareSchedule.length,
+      selectedHorizon * 12,
+    );
+    return taxAwareSchedule.slice(0, horizonMonths);
+  }, [taxAwareSchedule, selectedHorizon]);
+
+  const scheduleByYear = useMemo(() => {
+    return taxAwareSchedule.reduce<Record<number, typeof taxAwareSchedule>>(
+      (acc, row) => {
+        acc[row.year] ??= [];
+        acc[row.year].push(row);
+        return acc;
+      },
+      {},
+    );
+  }, [taxAwareSchedule]);
+
+  const yearSummaries = useMemo(() => {
+    return Object.entries(scheduleByYear)
+      .map(([yearKey, rows]) => {
+        const totals = rows.reduce(
+          (acc, row) => {
+            acc.contributions += row.contributions;
+            acc.monthlyWithdrawals += row.monthlyWithdrawals;
+            acc.earnings += row.earnings;
+            acc.endingBalance = row.endingBalance;
+            acc.federalTax += row.rowFederalTax;
+            acc.stateTax += row.rowStateTax;
+            acc.federalSaversCredit += row.rowFederalSaversCredit;
+            acc.stateDeductionCredit += row.rowDeductionTaxEffect;
+            return acc;
+          },
+          {
+            contributions: 0,
+            monthlyWithdrawals: 0,
+            earnings: 0,
+            endingBalance: 0,
+            federalTax: 0,
+            stateTax: 0,
+            federalSaversCredit: 0,
+            stateDeductionCredit: 0,
+          },
+        );
+        return { year: Number(yearKey), rows, totals };
+      })
+      .sort((a, b) => a.year - b.year);
+  }, [scheduleByYear]);
+
+  const filteredMonthlyTotals = useMemo(() => {
+    return filteredScheduleRows.reduce(
+      (acc, row) => {
+        acc.contributions += row.contributions;
+        acc.earnings += row.earnings;
+        acc.monthlyWithdrawals += row.monthlyWithdrawals;
+        acc.federalTax += row.rowFederalTax;
+        acc.stateTax += row.rowStateTax;
+        acc.federalSaversCredit += row.rowFederalSaversCredit;
+        acc.stateDeductionCredit += row.rowDeductionTaxEffect;
+        return acc;
+      },
+      {
+        contributions: 0,
+        earnings: 0,
+        monthlyWithdrawals: 0,
+        federalTax: 0,
+        stateTax: 0,
+        federalSaversCredit: 0,
+        stateDeductionCredit: 0,
+      },
+    );
+  }, [filteredScheduleRows]);
+
+  const availableHorizons = useMemo(() => {
+    const totalYears = Math.floor(taxAwareSchedule.length / 12);
+    const options = [1, 3, 5, 10, 20, 40].filter(
+      (value) => value <= totalYears,
+    );
+    return [...options, "max"] as const;
+  }, [taxAwareSchedule.length]);
+  const totalYearsForDisplay = useMemo(() => {
+    return Math.max(1, Math.floor(taxAwareSchedule.length / 12));
+  }, [taxAwareSchedule.length]);
+
+  useEffect(() => {
+    if (selectedHorizon === "max") {
+      return;
+    }
+    const totalYears = Math.floor(taxAwareSchedule.length / 12);
+    if (selectedHorizon > totalYears) {
+      setSelectedHorizon("max");
+    }
+  }, [selectedHorizon, taxAwareSchedule.length]);
+
+  const reportTotals = useMemo(() => {
+    const startingBalanceValue = parseNumber(startingBalance);
+    const totalContributions = filteredMonthlyTotals.contributions;
+    const totalEarnings = filteredMonthlyTotals.earnings;
+    const totalWithdrawals = filteredMonthlyTotals.monthlyWithdrawals;
+    const endingBalance =
+      startingBalanceValue +
+      totalContributions +
+      totalEarnings -
+      totalWithdrawals;
+    return {
+      startingBalance: startingBalanceValue,
+      totalContributions,
+      totalEarnings,
+      totalWithdrawals,
+      endingBalance,
+    };
+  }, [filteredMonthlyTotals, startingBalance]);
+  const ableCashflows = useMemo(() => {
+    if (filteredScheduleRows.length === 0) {
+      return [];
+    }
+    const flows = Array.from({ length: filteredScheduleRows.length + 1 }).map(
+      () => 0,
+    );
+    flows[1] -= reportTotals.startingBalance;
+    filteredScheduleRows.forEach((row, index) => {
+      if (row.monthIndex === 0) {
+        flows[index + 1] -= row.contributions;
+      } else {
+        flows[index] -= row.contributions;
+      }
+      flows[index + 1] +=
+        row.withdrawals +
+        row.rowFederalSaversCredit +
+        row.rowDeductionTaxEffect;
+    });
+    flows[flows.length - 1] += reportTotals.endingBalance;
+    return flows;
+  }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
+  const baseCashflows = useMemo(() => {
+    if (filteredScheduleRows.length === 0) {
+      return [];
+    }
+    const flows = Array.from({ length: filteredScheduleRows.length + 1 }).map(
+      () => 0,
+    );
+    flows[1] -= reportTotals.startingBalance;
+    filteredScheduleRows.forEach((row, index) => {
+      if (row.monthIndex === 0) {
+        flows[index + 1] -= row.contributions;
+      } else {
+        flows[index] -= row.contributions;
+      }
+      flows[index + 1] += row.withdrawals;
+    });
+    flows[flows.length - 1] += reportTotals.endingBalance;
+    return flows;
+  }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
+  const federalSaversCashflows = useMemo(() => {
+    if (baseCashflows.length === 0) {
+      return [];
+    }
+    const flows = [...baseCashflows];
+    filteredScheduleRows.forEach((row, index) => {
+      flows[index + 1] += row.rowFederalSaversCredit;
+    });
+    return flows;
+  }, [baseCashflows, filteredScheduleRows]);
+  const stateDeductionCashflows = useMemo(() => {
+    if (baseCashflows.length === 0) {
+      return [];
+    }
+    const flows = [...baseCashflows];
+    filteredScheduleRows.forEach((row, index) => {
+      flows[index + 1] += row.rowDeductionTaxEffect;
+    });
+    return flows;
+  }, [baseCashflows, filteredScheduleRows]);
+  const taxableCashflows = useMemo(() => {
+    if (filteredScheduleRows.length === 0) {
+      return [];
+    }
+    const flows = Array.from({ length: filteredScheduleRows.length + 1 }).map(
+      () => 0,
+    );
+    flows[1] -= reportTotals.startingBalance;
+    filteredScheduleRows.forEach((row, index) => {
+      if (row.monthIndex === 0) {
+        flows[index + 1] -= row.contributions;
+      } else {
+        flows[index] -= row.contributions;
+      }
+      flows[index + 1] += row.withdrawals - row.rowFederalTax - row.rowStateTax;
+    });
+    flows[flows.length - 1] += reportTotals.endingBalance;
+    return flows;
+  }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
+  const monthlyIrrAble = useMemo(
+    () => calculateMonthlyIrr(ableCashflows),
+    [ableCashflows],
+  );
+  const monthlyIrrTaxable = useMemo(
+    () => calculateMonthlyIrr(taxableCashflows),
+    [taxableCashflows],
+  );
+  const monthlyIrrBase = useMemo(
+    () => calculateMonthlyIrr(baseCashflows),
+    [baseCashflows],
+  );
+  const monthlyIrrFederalSavers = useMemo(
+    () => calculateMonthlyIrr(federalSaversCashflows),
+    [federalSaversCashflows],
+  );
+  const monthlyIrrStateDeduction = useMemo(
+    () => calculateMonthlyIrr(stateDeductionCashflows),
+    [stateDeductionCashflows],
+  );
+  const averageAnnualReturnTaxable = Math.pow(1 + monthlyIrrTaxable, 12) - 1;
+  const averageAnnualReturnBase = Math.pow(1 + monthlyIrrBase, 12) - 1;
+  const averageAnnualReturnAble = averageAnnualReturnBase;
+  const averageAnnualReturnFederalSavers =
+    Math.pow(1 + monthlyIrrFederalSavers, 12) - 1;
+  const averageAnnualReturnStateDeduction =
+    Math.pow(1 + monthlyIrrStateDeduction, 12) - 1;
+  const averageAnnualReturnFederalSaversImpact =
+    averageAnnualReturnFederalSavers - averageAnnualReturnBase;
+  const averageAnnualReturnStateDeductionImpact =
+    averageAnnualReturnStateDeduction - averageAnnualReturnBase;
+  const hasFederalSaversImpact =
+    Math.abs(averageAnnualReturnFederalSaversImpact) > 0.000001;
+  const hasStateDeductionImpact =
+    Math.abs(averageAnnualReturnStateDeductionImpact) > 0.000001;
+  const averageAnnualReturnAbleTotal =
+    averageAnnualReturnBase +
+    (hasStateDeductionImpact ? averageAnnualReturnStateDeductionImpact : 0) +
+    (hasFederalSaversImpact ? averageAnnualReturnFederalSaversImpact : 0);
+  const averageAnnualReturnTaxImpact =
+    averageAnnualReturnTaxable - averageAnnualReturnAbleTotal;
+
+  const averageAnnualReturnsTableItems = useMemo(
+    () => [
+      {
+        key: "able-base",
+        label: copy.report.cards.averageAnnualReturnsTable.items.ableBase,
+        value: averageAnnualReturnBase,
+        sign: "",
+        color: "#F2A65A",
+      },
+      {
+        key: "state-deduction",
+        label: copy.report.cards.averageAnnualReturnsTable.items.stateDeduction,
+        value: averageAnnualReturnStateDeductionImpact,
+        sign: "+",
+        color: "#6BCB77",
+      },
+      {
+        key: "federal-savers",
+        label: copy.report.cards.averageAnnualReturnsTable.items.federalSavers,
+        value: averageAnnualReturnFederalSaversImpact,
+        sign: "+",
+        color: "#C06C84",
+      },
+      {
+        key: "able-total",
+        label: copy.report.cards.averageAnnualReturnsTable.items.ableTotal,
+        value: averageAnnualReturnAbleTotal,
+        sign: "",
+        color: "#2E8BC0",
+      },
+      {
+        key: "taxes-on-earnings",
+        label: copy.report.cards.averageAnnualReturnsTable.items.taxesOnEarnings,
+        value: averageAnnualReturnTaxImpact,
+        sign: "-",
+        color: "#F38B57",
+      },
+      {
+        key: "taxable",
+        label: copy.report.cards.averageAnnualReturnsTable.items.taxable,
+        value: averageAnnualReturnTaxable,
+        sign: "",
+        color: "#7A6FF0",
+      },
+    ],
+    [
+      averageAnnualReturnAbleTotal,
+      averageAnnualReturnBase,
+      averageAnnualReturnFederalSaversImpact,
+      averageAnnualReturnStateDeductionImpact,
+      averageAnnualReturnTaxImpact,
+      averageAnnualReturnTaxable,
+      copy.report.cards.averageAnnualReturnsTable.items,
+    ],
+  );
+
+  const averageAnnualReturnsLabels =
+    copy.report.cards.averageAnnualReturnsTable.items;
+  const returnsWaterfallSteps = useMemo(() => {
+    const ableBase = averageAnnualReturnBase;
+    const stateImpact = averageAnnualReturnStateDeductionImpact;
+    const federalImpact = averageAnnualReturnFederalSaversImpact;
+    const ableTotal =
+      ableBase +
+      (hasStateDeductionImpact ? stateImpact : 0) +
+      (hasFederalSaversImpact ? federalImpact : 0);
+    const taxableReturn = averageAnnualReturnTaxable;
+    const hasTaxImpact = Math.abs(averageAnnualReturnTaxImpact) > 0.000001;
+    return [
+      {
+        label: averageAnnualReturnsLabels.ableBase,
+        value: ableBase,
+        offset: 0,
+        color: "#F2A65A",
+        key: "able-base",
+      },
+      ...(hasStateDeductionImpact
+        ? [
+            {
+              label: averageAnnualReturnsLabels.stateDeduction,
+              value: stateImpact,
+              offset: ableBase,
+              color: "#6BCB77",
+              key: "state-deduction",
+            },
+          ]
+        : []),
+      ...(hasFederalSaversImpact
+        ? [
+          {
+            label: averageAnnualReturnsLabels.federalSavers,
+            value: federalImpact,
+            offset:
+              ableBase +
+              (hasStateDeductionImpact ? stateImpact : 0),
+            color: "#C06C84",
+            key: "federal-savers",
+          },
+        ]
+      : []),
+      {
+        label: averageAnnualReturnsLabels.ableTotal,
+        value: ableTotal,
+        offset: 0,
+        color: "#2E8BC0",
+        key: "able-total",
+      },
+      ...(hasTaxImpact
+        ? [
+            {
+              label: averageAnnualReturnsLabels.taxesOnEarnings,
+              value: averageAnnualReturnTaxImpact,
+              offset: ableTotal,
+              color: "#F38B57",
+              key: "taxes-on-earnings",
+            },
+          ]
+        : []),
+      {
+        label: averageAnnualReturnsLabels.taxable,
+        value: taxableReturn,
+        offset: 0,
+        color: "#7A6FF0",
+        key: "taxable",
+      },
+    ];
+  }, [
+    averageAnnualReturnAbleTotal,
+    averageAnnualReturnBase,
+    averageAnnualReturnFederalSaversImpact,
+    averageAnnualReturnStateDeductionImpact,
+    averageAnnualReturnTaxImpact,
+    averageAnnualReturnTaxable,
+    averageAnnualReturnsLabels.ableBase,
+    averageAnnualReturnsLabels.ableTotal,
+    averageAnnualReturnsLabels.federalSavers,
+    averageAnnualReturnsLabels.stateDeduction,
+    averageAnnualReturnsLabels.taxable,
+    averageAnnualReturnsLabels.taxesOnEarnings,
+    hasFederalSaversImpact,
+    hasStateDeductionImpact,
+  ]);
+  const returnsWaterfallLegend = useMemo(
+    () =>
+      returnsWaterfallSteps.map((step) => ({
+        key: step.key,
+        label: step.label,
+        color: step.color,
+      })),
+    [returnsWaterfallSteps],
+  );
+  const returnsWaterfallOption = useMemo(() => {
+    const categories = returnsWaterfallSteps.map((step) => step.label);
+    const offsets = returnsWaterfallSteps.map((step) => step.offset);
+    const values = returnsWaterfallSteps.map((step) => step.value);
+    return {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        valueFormatter: (value: number) => percentFormatter.format(value),
+      },
+      grid: { left: 20, right: 20, top: 30, bottom: 12, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: categories,
+        axisLine: { lineStyle: { color: "var(--theme-border)" } },
+        axisLabel: {
+          show: false,
+        },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "#B7B7B7" } },
+        axisLabel: {
+          color: "var(--theme-muted)",
+          fontFamily: "var(--theme-font-family)",
+          formatter: (value: number) => percentFormatter.format(value),
+        },
+      },
+      series: [
+        {
+          name: copy.report.taxBenefits.waterfallSeries.offset,
+          type: "bar",
+          stack: "return",
+          silent: true,
+          itemStyle: { color: "transparent" },
+          data: offsets,
+        },
+        {
+          name: copy.report.taxBenefits.waterfallSeries.return,
+          type: "bar",
+          stack: "return",
+          label: { show: false },
+          data: values.map((value, index) => ({
+            value,
+            itemStyle: { color: returnsWaterfallSteps[index]?.color ?? "#F2A65A" },
+          })),
+        },
+      ],
+    };
+  }, [
+    chartAccentColor,
+    percentFormatter,
+    returnsWaterfallSteps,
+    wholeNumberFormatter,
+    copy.report.taxBenefits.waterfallSeries,
+  ]);
+
+
+  const taxBenefitsPalette = ["#3A7FBE", "#F2A65A", "#6BCB77", "#C06C84"];
+  const taxBenefitsItems = useMemo(() => {
+    const totals = {
+      federalTax: filteredMonthlyTotals.federalTax,
+      stateTax: filteredMonthlyTotals.stateTax,
+      federalSavers: filteredMonthlyTotals.federalSaversCredit,
+      stateDeduction: filteredMonthlyTotals.stateDeductionCredit,
+    };
+    return [
+      {
+        key: "federalTax",
+        label: copy.report.taxBenefits.items.federalTax.label,
+        note: copy.report.taxBenefits.items.federalTax.note,
+        value: Math.abs(totals.federalTax),
+        color: taxBenefitsPalette[0],
+      },
+      {
+        key: "stateTax",
+        label: copy.report.taxBenefits.items.stateTax.label,
+        note: copy.report.taxBenefits.items.stateTax.note,
+        value: Math.abs(totals.stateTax),
+        color: taxBenefitsPalette[1],
+      },
+      {
+        key: "federalSavers",
+        label: copy.report.taxBenefits.items.federalSavers.label,
+        note: copy.report.taxBenefits.items.federalSavers.note,
+        value: Math.abs(totals.federalSavers),
+        color: taxBenefitsPalette[2],
+      },
+      {
+        key: "stateDeduction",
+        label: copy.report.taxBenefits.items.stateDeduction.label,
+        note: copy.report.taxBenefits.items.stateDeduction.note,
+        value: Math.abs(totals.stateDeduction),
+        color: taxBenefitsPalette[3],
+      },
+    ];
+  }, [filteredMonthlyTotals, copy.report.taxBenefits.items, taxBenefitsPalette]);
+  const taxBenefitsTableItems = useMemo(() => {
+    const order = ["federalTax", "stateTax", "federalSavers", "stateDeduction"];
+    const byKey = new Map(taxBenefitsItems.map((item) => [item.key, item]));
+    return order
+      .map((key) => byKey.get(key))
+      .filter(
+        (item): item is (typeof taxBenefitsItems)[number] =>
+          Boolean(item) && item.value > 0,
+      );
+  }, [taxBenefitsItems]);
+  const taxBenefitsLegendItems = useMemo(
+    () => taxBenefitsItems.filter((item) => item.value > 0),
+    [taxBenefitsItems],
+  );
+  const taxBenefitsPieData = useMemo(
+    () =>
+      taxBenefitsItems
+        .filter((item) => item.value > 0)
+        .map((item) => ({
+          name: item.label,
+          value: item.value,
+          itemStyle: { color: item.color },
+        })),
+    [taxBenefitsItems],
+  );
+  const totalTaxBenefits = taxBenefitsItems.reduce(
+    (sum, item) => sum + item.value,
+    0,
+  );
+  const taxBenefitsPieOption = useMemo(() => {
+    if (taxBenefitsPieData.length === 0) {
+      return null;
+    }
+    return {
+      tooltip: {
+        trigger: "item",
+        valueFormatter: (value: number) =>
+          currencyFormatterWhole.format(value),
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["40%", "70%"],
+          avoidLabelOverlap: true,
+          padAngle: 2,
+          center: ["50%", "47%"],
+          itemStyle: {
+            borderRadius: 3,
+            borderWidth: 0,
+          },
+          label: {
+            show: true,
+            position: "outside",
+            alignTo: "labelLine",
+            edgeDistance: 2,
+            distanceToLabelLine: 6,
+            fontSize: 22,
+            fontWeight: 500,
+            color: "var(--theme-accent)",
+            fontFamily: "var(--theme-font-family)",
+            formatter: (params: { data: { value: number } }) =>
+              currencyFormatterWhole.format(params.data.value),
+          },
+          labelLine: {
+            show: true,
+            length: 18,
+            length2: 28,
+            lineStyle: {
+              color: "var(--theme-border)",
+            },
+          },
+          emphasis: {
+            label: {
+              show: true,
+              color: "var(--theme-accent)",
+              fontSize: 22,
+              fontWeight: 500,
+              fontFamily: "var(--theme-font-family)",
+              formatter: (params: { data: { value: number } }) =>
+                currencyFormatterWhole.format(params.data.value),
+            },
+          },
+          labelLayout: { hideOverlap: true, moveOverlap: "shiftY", distance: 8 },
+          data: taxBenefitsPieData,
+        },
+      ],
+    };
+  }, [taxBenefitsPieData, currencyFormatterWhole]);
+  const totalTaxBenefitsItem = useMemo(
+    () => ({
+      label: copy.report.cards.taxBenefits.label,
+      value: totalTaxBenefits,
+    }),
+    [copy.report.cards.taxBenefits.label, totalTaxBenefits],
+  );
+
+  const pdfReportProps = useMemo<ReportPdfProps>(() => {
+    const summaryCards = [
+      {
+        label: copy.report.cards.startingBalance.label,
+        value: currencyFormatterWhole.format(reportTotals.startingBalance),
+        note: copy.report.cards.startingBalance.note,
+      },
+      {
+        label: copy.report.cards.totalContributions.label,
+        value: currencyFormatterWhole.format(reportTotals.totalContributions),
+        note: copy.report.cards.totalContributions.note,
+      },
+      {
+        label: copy.report.cards.investmentEarnings.label,
+        value: currencyFormatterWhole.format(reportTotals.totalEarnings),
+        note: copy.report.cards.investmentEarnings.note,
+      },
+      {
+        label: copy.report.cards.totalWithdrawals.label,
+        value: currencyFormatterWhole.format(reportTotals.totalWithdrawals),
+        note: copy.report.cards.totalWithdrawals.note,
+      },
+      {
+        label: copy.report.cards.endingBalance.label,
+        value: currencyFormatterWhole.format(reportTotals.endingBalance),
+        note: copy.report.cards.endingBalance.note,
+      },
+    ];
+    const taxBenefits = {
+      items: taxBenefitsItems.map((item) => ({
+        label: item.label,
+        value: currencyFormatterWhole.format(item.value),
+      })),
+      totalLabel: copy.report.cards.taxBenefits.label,
+      totalValue: currencyFormatterWhole.format(totalTaxBenefitsItem.value),
+    };
+    const rowsByYear = filteredScheduleRows.reduce<Record<number, {
+      contributions: number;
+      withdrawals: number;
+      earnings: number;
+      balance: number;
+      federalTax: number;
+      stateTax: number;
+      federalSaversCredit: number;
+      stateTaxDeductionCredit: number;
+    }>>((acc, row) => {
+      if (!acc[row.year]) {
+        acc[row.year] = {
+          contributions: 0,
+          withdrawals: 0,
+          earnings: 0,
+          balance: 0,
+          federalTax: 0,
+          stateTax: 0,
+          federalSaversCredit: 0,
+          stateTaxDeductionCredit: 0,
+        };
+      }
+      acc[row.year].contributions += row.contributions;
+      acc[row.year].withdrawals += row.withdrawals;
+      acc[row.year].earnings += row.earnings;
+      acc[row.year].federalTax += row.rowFederalTax;
+      acc[row.year].stateTax += row.rowStateTax;
+      acc[row.year].federalSaversCredit += row.rowFederalSaversCredit;
+      acc[row.year].stateTaxDeductionCredit += row.rowDeductionTaxEffect;
+      if (row.month === 12) {
+        acc[row.year].balance = row.endingBalance;
+      }
+      return acc;
+    }, {});
+    const amortizationRows = Object.entries(rowsByYear)
+      .sort(([yearA], [yearB]) => Number(yearA) - Number(yearB))
+      .map(([year, totals]) => ({
+        period: year,
+        contributions: currencyFormatterWhole.format(totals.contributions),
+        withdrawals: currencyFormatterWhole.format(totals.withdrawals),
+        earnings: currencyFormatterWhole.format(totals.earnings),
+        balance: currencyFormatterWhole.format(totals.balance),
+        federalTax: currencyFormatterWhole.format(totals.federalTax),
+        stateTax: currencyFormatterWhole.format(totals.stateTax),
+        federalSaversCredit: currencyFormatterWhole.format(totals.federalSaversCredit),
+        stateTaxDeductionCredit: currencyFormatterWhole.format(
+          totals.stateTaxDeductionCredit,
+        ),
+      }));
+    return {
+      logoSrc:
+        selectedClientId === "state-il" ? "/clients/state-il/logo.png" : undefined,
+      clientName: copy.header.clientName,
+      reportTitle: copy.report.title,
+      reportDate: new Date().toLocaleDateString(copy.locale),
+      summaryCards,
+      taxBenefits,
+      amortizationRows,
+      footnotes: pdfFootnotes,
+      disclosures: pdfDisclosures,
+    };
+  }, [
+    copy.header.clientName,
+    copy.locale,
+    copy.monthNamesShort,
+    copy.report.cards.endingBalance.label,
+    copy.report.cards.endingBalance.note,
+    copy.report.cards.investmentEarnings.label,
+    copy.report.cards.investmentEarnings.note,
+    copy.report.cards.startingBalance.label,
+    copy.report.cards.startingBalance.note,
+    copy.report.cards.taxBenefits.label,
+    copy.report.cards.totalContributions.label,
+    copy.report.cards.totalContributions.note,
+    copy.report.cards.totalWithdrawals.label,
+    copy.report.cards.totalWithdrawals.note,
+    copy.report.title,
+    currencyFormatterWhole,
+    filteredScheduleRows,
+    pdfDisclosures,
+    pdfFootnotes,
+    reportTotals.endingBalance,
+    reportTotals.startingBalance,
+    reportTotals.totalContributions,
+    reportTotals.totalEarnings,
+    reportTotals.totalWithdrawals,
+    selectedClientId,
+    taxBenefitsItems,
+    totalTaxBenefitsItem.value,
+  ]);
+
+  const handleDownloadPdf = async () => {
+    if (isGeneratingPdf) {
+      return;
+    }
+    setIsGeneratingPdf(true);
+    try {
+      const blob = await pdf(<ReportPdf {...pdfReportProps} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `able-report-${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const toggleYearExpanded = (year: number) => {
+    setExpandedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) {
+        next.delete(year);
+      } else {
+        next.add(year);
+      }
+      return next;
+    });
+  };
+
+  const wheelItemHeight = 40;
+  const wheelPadding = 2;
+  const wheelVisibleItems = 5;
+
+  const monthWheelItems = [
+    ...Array.from({ length: wheelPadding }).map(() => null),
+    ...monthlyWithdrawalMonths,
+    ...Array.from({ length: wheelPadding }).map(() => null),
+  ];
+  const yearWheelItems = [
+    ...Array.from({ length: wheelPadding }).map(() => null),
+    ...monthlyWithdrawalYears,
+    ...Array.from({ length: wheelPadding }).map(() => null),
+  ];
+  const snapMonthWheel = (target: HTMLDivElement | null, index: number) => {
+    if (!target) {
+      return;
+    }
+    target.scrollTo({
+      top: index * wheelItemHeight,
+      behavior: "auto",
+    });
+  };
+  const snapYearWheel = (target: HTMLDivElement | null, index: number) => {
+    if (!target) {
+      return;
+    }
+    target.scrollTo({
+      top: index * wheelItemHeight,
+      behavior: "auto",
+    });
+  };
+
+  useEffect(() => {
+    if (!showMonthlyWithdrawalPicker) {
+      return;
+    }
+    const monthIndex = Math.max(
+      0,
+      monthlyWithdrawalMonths.findIndex(
+        (month) => month.value === monthlyWithdrawalStartMonth,
+      ),
+    );
+    const yearIndex = Math.max(
+      0,
+      monthlyWithdrawalYears.findIndex(
+        (year) => year === monthlyWithdrawalStartYear,
+      ),
+    );
+    if (monthWheelRef.current) {
+      monthWheelRef.current.scrollTo({
+        top: (monthIndex + wheelPadding) * wheelItemHeight,
+      });
+    }
+    if (yearWheelRef.current) {
+      yearWheelRef.current.scrollTo({
+        top: (yearIndex + wheelPadding) * wheelItemHeight,
+      });
+    }
+  }, [
+    showMonthlyWithdrawalPicker,
+    monthlyWithdrawalMonths,
+    monthlyWithdrawalYears,
+    monthlyWithdrawalStartMonth,
+    monthlyWithdrawalStartYear,
+  ]);
+
+  useEffect(() => {
+    if (!showMonthlyWithdrawalPicker) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !monthlyPickerRef.current) {
+        return;
+      }
+      if (!monthlyPickerRef.current.contains(target)) {
+        setShowMonthlyWithdrawalPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [showMonthlyWithdrawalPicker]);
+
+  useEffect(() => {
+    setShowMonthlyWithdrawalPicker(false);
+  }, [step, showSchedule]);
+
+  const actionControls = (
+    <>
+      {step < steps.length - 1 && (
+        <button
+          type="button"
+          onClick={() =>
+            setStep((prev) => Math.min(steps.length - 1, prev + 1))
+          }
+          disabled={disableNext}
+          aria-label={copy.buttons.next}
+          className="rounded-full bg-[color:var(--theme-accent)] p-2 text-[color:var(--theme-accent-text)] transition hover:opacity-90 disabled:opacity-40"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
+            <path
+              d="M7 4l6 6-6 6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </svg>
+        </button>
+      )}
+      {step === steps.length - 1 && !showSchedule ? (
+        <button
+          type="button"
+          onClick={() => window.print()}
+          aria-label={copy.accessibility.printReport}
+          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
+            <path
+              d="M7 8V4h10v4M7 17h10v3H7v-3ZM5 9h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          window.location.reload();
+        }}
+        aria-label={copy.accessibility.refresh}
+        className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
+          <path
+            d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <div className="flex items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+        <span className="sr-only">{copy.languageLabel}</span>
+        {(["en", "es"] as const).map((lang) => (
+          <button
+            key={lang}
+            type="button"
+            onClick={() => setLanguage(lang)}
+            aria-pressed={language === lang}
+            className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold tracking-[0.25em] transition ${
+              language === lang
+                ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+            }`}
           >
-            Documentation
-          </a>
-        </div>
-      </main>
+            {lang.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  return (
+    <div
+      className="min-h-screen flex flex-col"
+      style={{
+        ...themeVars,
+        backgroundColor: "var(--theme-bg)",
+        color: "var(--theme-fg)",
+      }}
+    >
+      <div className="relative mx-auto flex w-full max-w-[90rem] flex-1 flex-col gap-2 px-4 pb-6 pt-0">
+        <div className="pointer-events-none absolute -left-32 top-10 h-40 w-40 rounded-full bg-[color:var(--theme-accent)]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 top-40 h-48 w-48 rounded-full bg-[color:var(--theme-accent)]/15 blur-3xl" />
+
+        <header className="flex shrink-0 flex-col gap-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-[0.96rem] shadow-lg backdrop-blur">
+          <p className="text-xs uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+            {copy.header.bannerPlaceholder}
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
+                {copy.header.clientName}
+              </h1>
+              <p className="mt-1 text-sm text-[color:var(--theme-muted)]">
+                {copy.header.clientSubtitle}
+              </p>
+            </div>
+            <div className="flex flex-row flex-wrap items-center gap-3 max-[1024px]:flex-col max-[1024px]:items-stretch">
+              <select
+                className="select-pill rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]"
+                value={selectedClientId}
+                onChange={(event) => setSelectedClientId(event.target.value)}
+              >
+                <option value="base">{copy.themes.base}</option>
+                <option value="state-ca">{copy.themes.ca}</option>
+                <option value="state-il">{copy.themes.il}</option>
+                <option value="state-ut">{copy.themes.ut}</option>
+                <option value="state-tx">{copy.themes.tx}</option>
+              </select>
+              <div className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                {copy.screenLabel(step + 1, steps.length)}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {showSchedule ? (
+          <section className="flex flex-1 min-h-0 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-lg backdrop-blur max-[1024px]:pb-28">
+            <div className="flex w-full items-center gap-3 max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showSchedule) {
+                      setShowSchedule(false);
+                    } else {
+                      setStep((prev) => Math.max(0, prev - 1));
+                    }
+                  }}
+                  disabled={step === 0 && !showSchedule}
+                  aria-label={copy.buttons.back}
+                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
+                    <path
+                      d="M13 4l-6 6 6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSchedule(false);
+                    setStep(1);
+                  }}
+                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                >
+                  {copy.misc.contributionsWithdrawals}
+                </button>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                  <span className="sr-only">{copy.languageLabel}</span>
+                  {(["en", "es"] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setLanguage(lang)}
+                      aria-pressed={language === lang}
+                      className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold tracking-[0.25em] transition ${
+                        language === lang
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                      }`}
+                    >
+                      {lang.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+              <span />
+              <h2 className="text-center text-xl font-semibold text-[color:var(--theme-fg)]">
+                {copy.misc.amortizationSchedule}
+              </h2>
+              <span />
+            </div>
+            {calcError ? (
+              <p className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] px-4 py-2 text-xs text-[color:var(--theme-warning-text)]">
+                {calcError}
+              </p>
+            ) : null}
+            <div className="overflow-x-auto rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)]">
+              <table className="min-w-full divide-y divide-[color:var(--theme-border)] text-left text-xs">
+                <thead className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                  <tr>
+                    <th className="px-3 py-2" colSpan={5} />
+                    <th
+                      className="px-3 py-2 text-center border-b border-[color:var(--theme-border)]"
+                      colSpan={4}
+                    >
+                      {copy.table.taxBenefitsHeading}
+                    </th>
+                  </tr>
+                  <tr>
+                    {[
+                      copy.table.month,
+                      copy.table.contributions,
+                      copy.table.monthlyWithdrawals,
+                      copy.table.earnings,
+                      copy.table.balance,
+                      copy.table.federalTax,
+                      copy.table.stateTax,
+                      copy.table.federalSaversCredit,
+                      copy.table.stateTaxDeductionCredit,
+                    ].map((label, index) => (
+                      <th
+                        key={label}
+                        className={`px-3 py-2 text-center ${
+                          index === 0 ? "w-32 whitespace-nowrap" : ""
+                        }`}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[color:var(--theme-border)] text-sm text-[color:var(--theme-muted)]">
+                  {yearSummaries.map(({ year, rows, totals }) => (
+                    <Fragment key={`year-group-${year}`}>
+                      <tr
+                        key={`year-${year}`}
+                        className="bg-[color:var(--theme-accent)]/10"
+                      >
+                        <td
+                          className="px-3 py-2 text-center font-semibold text-[color:var(--theme-fg)] whitespace-nowrap"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleYearExpanded(year)}
+                            className="flex w-full items-center justify-center gap-2"
+                          >
+                            <span>{year}</span>
+                            <span className="text-xs text-[color:var(--theme-muted)]">
+                              {expandedYears.has(year) ? "−" : "+"}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatterWhole.format(totals.contributions)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatterWhole.format(totals.monthlyWithdrawals)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatter.format(totals.earnings)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-semibold text-[color:var(--theme-fg)]">
+                          {currencyFormatter.format(totals.endingBalance)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatter.format(totals.federalTax)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatter.format(totals.stateTax)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatter.format(totals.federalSaversCredit)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {currencyFormatter.format(totals.stateDeductionCredit)}
+                        </td>
+                      </tr>
+                      {expandedYears.has(year) &&
+                        rows.map((row) => (
+                          <tr
+                            key={`${row.year}-${row.month}-${row.monthIndex}`}
+                            className="bg-[color:var(--theme-accent)]/5 text-[color:var(--theme-muted)]"
+                          >
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              - {monthNames[row.month - 1]} {row.year}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatterWhole.format(row.contributions)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatterWhole.format(row.monthlyWithdrawals)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatter.format(row.earnings)}
+                            </td>
+                            <td className="px-3 py-2 text-center text-[color:var(--theme-fg)]">
+                              {currencyFormatter.format(row.endingBalance)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatter.format(row.rowFederalTax)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatter.format(row.rowStateTax)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatter.format(row.rowFederalSaversCredit)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {currencyFormatter.format(row.rowDeductionTaxEffect)}
+                            </td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : (
+          <section className="flex flex-1 min-h-0 flex-col space-y-6 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-lg backdrop-blur max-[1024px]:pb-28">
+            <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
+              <div className="flex w-full items-center justify-between gap-3 lg:w-auto lg:justify-start">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showSchedule) {
+                      setShowSchedule(false);
+                    } else {
+                      setStep((prev) => Math.max(0, prev - 1));
+                    }
+                  }}
+                  disabled={step === 0 && !showSchedule}
+                  aria-label={copy.buttons.back}
+                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
+                    <path
+                      d="M13 4l-6 6 6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+                <div className="flex items-center gap-2 lg:hidden">
+                  {actionControls}
+                </div>
+              </div>
+              <div className="flex justify-center">
+                {step === 0 ? (
+                  <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                    {copy.misc.stepHeaders.demographics}
+                  </div>
+                ) : null}
+                {step === 1 ? (
+                  <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                    {copy.misc.stepHeaders.accountActivity}
+                  </div>
+                ) : null}
+                {step === steps.length - 1 ? (
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <span className="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
+                      {copy.misc.stepHeaders.horizonPrompt}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-2 py-1">
+                      {availableHorizons.map((value) => {
+                        const label =
+                          value === "max"
+                            ? copy.misc.horizonMaxLabel
+                            : `${value}${copy.misc.horizonYearSuffix}`;
+                        const isActive = selectedHorizon === value;
+                        return (
+                          <button
+                            key={`horizon-${value}`}
+                            type="button"
+                            onClick={() => setSelectedHorizon(value)}
+                            className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.25em] transition ${
+                              isActive
+                                ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                            }`}
+                          >
+                            <span>{label}</span>
+                            {value === "max" && isActive ? (
+                              <span className="ml-2 text-[0.55rem] tracking-[0.2em]">
+                                {`${totalYearsForDisplay}${copy.misc.horizonYearSuffix}`}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="hidden items-center justify-end gap-2 lg:flex">
+                {actionControls}
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {step === 0 && (
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_0.8fr]">
+                  <div className="flex min-h-0 flex-col gap-4">
+                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                      <div className="grid gap-3 md:grid-cols-2 md:items-center">
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.beneficiary}
+                          </p>
+                          <input
+                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            value={beneficiaryName}
+                            onChange={(event) => setBeneficiaryName(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.stateOfResidence}
+                          </p>
+                          <select
+                            className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            value={stateCode}
+                            onChange={(event) => setStateCode(event.target.value)}
+                          >
+                            {availableStateCodes.map((code) => (
+                              <option key={code} value={code}>
+                                {code}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                      <div className="grid gap-3 grid-cols-2">
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.taxFilingStatus}
+                          </p>
+                          <select
+                            className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            value={filingStatus}
+                            onChange={(event) => setFilingStatus(event.target.value)}
+                          >
+                            {filingStatusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.adjustedGrossIncome}
+                          </p>
+                          <input
+                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            value={accountAGI}
+                            onChange={(event) => setAccountAGI(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.timeHorizonYears}
+                          </p>
+                          <input
+                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            type="number"
+                            min={1}
+                            max={50}
+                            step={1}
+                            value={timeHorizonYears}
+                            onChange={(event) => {
+                              const rawValue = event.target.value;
+                              if (rawValue === "") {
+                                setTimeHorizonYears(rawValue);
+                                return;
+                              }
+                              const parsedValue = Number(rawValue);
+                              if (!Number.isFinite(parsedValue)) {
+                                setTimeHorizonYears(rawValue);
+                                return;
+                              }
+                              const clampedValue = Math.min(
+                                50,
+                                Math.max(1, Math.round(parsedValue)),
+                              );
+                              setTimeHorizonYears(String(clampedValue));
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                            {copy.labels.annualReturnAssumption}
+                          </p>
+                          <input
+                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                            value={annualReturnOverride}
+                            onChange={(event) =>
+                              setAnnualReturnOverride(event.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                      <label className="flex items-center gap-3 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                        <input
+                          id="beneficiary-ssi-benefits"
+                          type="checkbox"
+                          checked={isSsiBeneficiary}
+                          onChange={(event) =>
+                            setIsSsiBeneficiary(event.target.checked)
+                          }
+                          className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100"
+                        />
+                        <span>{copy.labels.ssiBenefitsQuestion}</span>
+                      </label>
+                    </div>
+                  </div>
+                  <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 text-xs text-[color:var(--theme-muted)]">
+                    {residencyWarningMessage && (
+                      <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                        <span>{residencyWarningMessage}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (planStateCode) {
+                              setStateCode(planStateCode);
+                            }
+                            setResidencyOverride(true);
+                          }}
+                          className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                        >
+                          {copy.residency.actionLabel}
+                        </button>
+                      </div>
+                    )}
+                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
+                      {copy.misc.disclosurePlaceholder}
+                    </div>
+                  </aside>
+                </div>
+              )}
+
+              {step === 1 && (
+                <div className="flex min-h-0 flex-1 flex-col gap-6">
+                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr]">
+                    <div className="flex min-h-0 flex-col">
+                      <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                        <div className="space-y-4">
+                          <div className="grid gap-4 sm:grid-cols-1">
+                            <div className="space-y-2">
+                              <p className="inline-flex items-center gap-2 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.startingBalance}
+                            <button
+                              type="button"
+                              aria-label={copy.accessibility.startingBalanceInfo}
+                              className="group relative flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)]/65 text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)]"
+                            >
+                              i
+                              <span className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 w-64 rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                                {copy.tooltips.startingBalance}
+                              </span>
+                            </button>
+                              </p>
+                              <input
+                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={startingBalance}
+                                onChange={(event) =>
+                                  setStartingBalance(event.target.value)
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <p className="sm:col-span-3 text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                              {copy.labels.contributionsParent}
+                            </p>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.upfrontContribution}
+                              </p>
+                              <input
+                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={beneficiaryUpfrontContribution}
+                                onChange={(event) =>
+                                  setBeneficiaryUpfrontContribution(event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.recurringContribution}
+                              </p>
+                              <input
+                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={beneficiaryRecurringContribution}
+                                onChange={(event) =>
+                                  setBeneficiaryRecurringContribution(event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.contributionCadence}
+                              </p>
+                              <select
+                                className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={beneficiaryRecurringCadence}
+                                onChange={(event) =>
+                                  setBeneficiaryRecurringCadence(
+                                    event.target.value as (typeof cadenceOptions)[number],
+                                  )
+                                }
+                              >
+                                {cadenceOptions.map((cadence) => (
+                                  <option key={cadence} value={cadence}>
+                                    {copy.cadenceLabels[cadence]}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-4">
+                          <div className="space-y-3">
+                            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                          {copy.labels.monthlyWithdrawalsTitle}
+                            </p>
+                            <div className="grid gap-4 sm:grid-cols-3">
+                              <div className="space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.amountShort}
+                                </p>
+                                <input
+                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                  value={monthlyWithdrawalAmount}
+                                  onChange={(event) =>
+                                    setMonthlyWithdrawalAmount(event.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.startShort}
+                                </p>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowMonthlyWithdrawalPicker((prev) => !prev)
+                                    }
+                                    className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
+                                  >
+                                    <span>
+                                      {monthlyWithdrawalMonthLabel}{" "}
+                                      {monthlyWithdrawalStartYear}
+                                    </span>
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 24 24"
+                                      className="h-4 w-4 text-[color:var(--theme-muted)]"
+                                    >
+                                      <path
+                                        d="M6 9l6 6 6-6"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                  {showMonthlyWithdrawalPicker && (
+                                    <div
+                                      ref={monthlyPickerRef}
+                                      className="absolute left-0 right-0 bottom-full z-10 mb-2 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg"
+                                    >
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.month}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={monthWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight,
+                                                paddingBottom: wheelItemHeight / 2,
+                                              }}
+                                            >
+                                              {monthWheelItems.map((month, index) => (
+                                                <div
+                                                  key={`month-${month?.value ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!month) {
+                                                      return;
+                                                    }
+                                                    setMonthlyWithdrawalStartMonth(
+                                                      month.value,
+                                                    );
+                                                    snapMonthWheel(
+                                                      monthWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={
+                                                      month?.value ===
+                                                      monthlyWithdrawalStartMonth
+                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
+                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
+                                                    }
+                                                  >
+                                                    {month?.label ?? ""}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.year}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={yearWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight,
+                                                paddingBottom: wheelItemHeight / 2,
+                                              }}
+                                            >
+                                              {yearWheelItems.map((year, index) => (
+                                                <div
+                                                  key={`year-${year ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!year) {
+                                                      return;
+                                                    }
+                                                    setMonthlyWithdrawalStartYear(
+                                                      year,
+                                                    );
+                                                    snapYearWheel(
+                                                      yearWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={
+                                                      year ===
+                                                      monthlyWithdrawalStartYear
+                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
+                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
+                                                    }
+                                                  >
+                                                    {year ?? ""}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setShowMonthlyWithdrawalPicker(false)
+                                          }
+                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
+                                        >
+                                          {copy.buttons.done}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="h-[0.9rem]" />
+                                <button
+                                  type="button"
+                                  className="h-10 w-full rounded-full bg-[color:var(--theme-muted)] text-[0.65rem] font-bold uppercase tracking-[0.3em] text-white shadow-sm transition hover:opacity-90"
+                                >
+                              {copy.labels.advanced}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFscOutcome(null);
+                              setShowFscEligibility(true);
+                            }}
+                            style={fscButtonStyle(fscOutcome)}
+                            className="w-full rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                          >
+                            {fscOutcome === "eligible"
+                              ? copy.federalSavers.buttonEligible
+                              : fscOutcome === "ineligible"
+                                ? copy.federalSavers.buttonIneligible
+                                : copy.federalSavers.buttonDefault}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5">
+                  {showSsiPrompt ? (
+                    <div className="space-y-2 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                      <p>
+                        Based on your planned contributions, withdrawals and earnings
+                        assumptions the account is projected to exceed{" "}
+                        {currencyFormatter.format(ssiBalanceLimit)} in{" "}
+                        {ssiExceedLabel}.
+                      </p>
+                      <p>
+                        This may result in suspension of SSI benefits and have an
+                        adverse financial impact.
+                      </p>
+                      <p>
+                        Accordingly, in this planning tool, contributions are
+                        stopped in {ssiExceedLabel}. Recurring withdrawals are
+                        also initiated to keep the balance at{" "}
+                        {currencyFormatter.format(ssiBalanceLimit)} by
+                        withdrawing the projected monthly earnings.
+                      </p>
+                    </div>
+                  ) : null}
+                  {showWorkToAblePrompt && (
+                    <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                      {copy.workToAble.prompt(currencyFormatter.format(annualLimit))}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setWorkToAbleDecision("yes")}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                            workToAbleDecision === "yes"
+                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                              : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                          }`}
+                        >
+                          {copy.misc.yes}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWorkToAbleDecision("no")}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                            workToAbleDecision === "no"
+                              ? "bg-[color:var(--theme-danger)] text-[color:var(--theme-accent-text)]"
+                              : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                          }`}
+                        >
+                          {copy.misc.no}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {workToAbleDecision === "no" && exceedsLimit ? (
+                    <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                      <p>
+                        {copy.workToAble.declineMessage(
+                          currencyFormatter.format(annualLimit),
+                        )}
+                      </p>
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                          {copy.workToAble.amountOverLabel}
+                        </p>
+                        {getOveragePeriodNote(annualOveragePeriod) ? (
+                          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                            {getOveragePeriodNote(annualOveragePeriod)}
+                          </p>
+                        ) : null}
+                        <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                          {currencyFormatterWhole.format(amountOverAnnualLimit)}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                          {copy.workToAble.applyMaxPrompt}
+                        </p>
+                        {getApplyMaxNote(annualLimit) ? (
+                          <p className="text-xs text-[color:var(--theme-warning-text)]">
+                            {getApplyMaxNote(annualLimit)}
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => applyMaxAllowedContribution(annualLimit)}
+                          className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+                        >
+                          {copy.misc.yes}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {workToAbleDecision === "yes" && workToAbleTestFinalized ? (
+                    <>
+                      {workToAbleNotEligible && exceedsLimit ? (
+                        <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                          <p className="text-sm font-semibold">
+                            {copy.workToAble.ineligibleMessage(
+                              currencyFormatter.format(annualLimit),
+                            )}
+                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                              {copy.workToAble.amountOverLabel}
+                            </p>
+                            {getOveragePeriodNote(annualOveragePeriod) ? (
+                              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                                {getOveragePeriodNote(annualOveragePeriod)}
+                              </p>
+                            ) : null}
+                            <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                              {currencyFormatterWhole.format(
+                                amountOverAnnualLimit,
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                              {copy.workToAble.applyMaxPrompt}
+                            </p>
+                            {getApplyMaxNote(annualLimit) ? (
+                              <p className="text-xs text-[color:var(--theme-warning-text)]">
+                                {getApplyMaxNote(annualLimit)}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                applyMaxAllowedContribution(annualLimit)
+                              }
+                              className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+                            >
+                              {copy.misc.yes}
+                            </button>
+                          </div>
+                        </div>
+                      ) : workToAbleOverLimit ? (
+                        <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                          <p className="text-sm font-semibold">
+                            {copy.workToAble.eligibleOver(
+                              currencyFormatter.format(
+                                workToAbleAdditionalContribution,
+                              ),
+                              currencyFormatter.format(combinedLimit),
+                            )}
+                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                              {copy.workToAble.amountOverCombinedLabel}
+                            </p>
+                            {getOveragePeriodNote(combinedOveragePeriod) ? (
+                              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+                                {getOveragePeriodNote(combinedOveragePeriod)}
+                              </p>
+                            ) : null}
+                            <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                              {currencyFormatterWhole.format(
+                                amountOverCombinedLimit,
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+                              {copy.workToAble.applyMaxPrompt}
+                            </p>
+                            {getApplyMaxNote(combinedLimit) ? (
+                              <p className="text-xs text-[color:var(--theme-warning-text)]">
+                                {getApplyMaxNote(combinedLimit)}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                applyMaxAllowedContribution(combinedLimit)
+                              }
+                              className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+                            >
+                              {copy.misc.yes}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : workToAbleDecision === "yes" ? (
+                    <div className="space-y-4 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
+                      <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                        {copy.workToAble.title}
+                      </p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                          {copy.workToAble.earnedIncomeQuestion}
+                        </p>
+                        <div className="flex gap-2">
+                          {[true, false].map((value) => (
+                            <button
+                              key={`earned-${value}`}
+                              type="button"
+                              onClick={() => setWorkToAbleHasEarnedIncome(value)}
+                              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                workToAbleHasEarnedIncome === value
+                                  ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                  : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                              }`}
+                            >
+                              {value ? copy.misc.yes : copy.misc.no}
+                            </button>
+                          ))}
+                        </div>
+                        {workToAbleHasEarnedIncome && (
+                          <>
+                            <div className="mt-3" />
+                            <div className="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--theme-fg)]">
+                              {copy.tooltips.earnedIncome.prompt}
+                              <span className="group relative inline-flex p-2 -m-2">
+                                <button
+                                  type="button"
+                                  aria-label={
+                                    copy.accessibility.estimatedEarnedIncomeInfo
+                                  }
+                                  className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)]/65 text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)]"
+                                >
+                                  i
+                                </button>
+                                <span className="pointer-events-none absolute right-0 top-full z-10 w-80 max-h-56 overflow-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 pb-2 pt-3 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] text-left opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
+                                  <p>{copy.tooltips.earnedIncome.lead}</p>
+                                  <p className="mt-2 font-semibold">
+                                    {copy.tooltips.earnedIncome.includedTitle}
+                                  </p>
+                                  <ul className="mt-1 list-disc space-y-1 pl-4 font-normal">
+                                    {copy.tooltips.earnedIncome.includedItems.map(
+                                      (item) => (
+                                        <li key={item}>{item}</li>
+                                      ),
+                                    )}
+                                  </ul>
+                                  <p className="mt-2 font-semibold">
+                                    {copy.tooltips.earnedIncome.excludedTitle}
+                                  </p>
+                                  <ul className="mt-1 list-disc space-y-1 pl-4 font-normal">
+                                    {copy.tooltips.earnedIncome.excludedItems.map(
+                                      (item) => (
+                                        <li key={item}>{item}</li>
+                                      ),
+                                    )}
+                                  </ul>
+                                </span>
+                              </span>
+                            </div>
+                            <input
+                              className="mt-2 h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              value={workToAbleEarnedIncome}
+                              onChange={(event) =>
+                                setWorkToAbleEarnedIncome(event.target.value)
+                              }
+                            />
+                          </>
+                        )}
+                      </div>
+                      {workToAbleHasEarnedIncome &&
+                      workToAbleIncomeAmount > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                            {copy.workToAble.employerPlanQuestion}
+                          </p>
+                          <div className="flex gap-2">
+                            {[true, false].map((value) => (
+                              <button
+                                key={`plan-${value}`}
+                                type="button"
+                                onClick={() =>
+                                  setWorkToAbleHasEmployerPlan(value)
+                                }
+                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                  workToAbleHasEmployerPlan === value
+                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                                }`}
+                              >
+                                {value ? copy.misc.yes : copy.misc.no}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {showPlanMaxStopMessage ? (
+                    <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                      <p>
+                        {copy.warnings.planMaxStop(
+                          currencyFormatter.format(planMaxBalance ?? 0),
+                          planMaxStopLabel ?? "",
+                        )}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {showFscEligibility && (
+                    <div className="space-y-3 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                          {copy.federalSavers.eligibilityTitle}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowFscEligibility(false)}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-xs font-semibold text-[color:var(--theme-fg)]"
+                          aria-label={copy.federalSavers.closeEligibility}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                            {copy.federalSavers.questions.hasTaxLiability}
+                          </p>
+                          <div className="flex gap-2">
+                            {[true, false].map((value) => (
+                              <button
+                                key={`fsc-tax-${value}`}
+                                type="button"
+                                onClick={() => setFscHasTaxLiability(value)}
+                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                  fscHasTaxLiability === value
+                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                                }`}
+                              >
+                                {value ? copy.misc.yes : copy.misc.no}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                            {copy.federalSavers.questions.isOver18}
+                          </p>
+                          <div className="flex gap-2">
+                            {[true, false].map((value) => (
+                              <button
+                                key={`fsc-age-${value}`}
+                                type="button"
+                                onClick={() => setFscIsOver18(value)}
+                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                  fscIsOver18 === value
+                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                                }`}
+                              >
+                                {value ? copy.misc.yes : copy.misc.no}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                            {copy.federalSavers.questions.isStudent}
+                          </p>
+                          <div className="flex gap-2">
+                            {[true, false].map((value) => (
+                              <button
+                                key={`fsc-student-${value}`}
+                                type="button"
+                                onClick={() => setFscIsStudent(value)}
+                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                  fscIsStudent === value
+                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                                }`}
+                              >
+                                {value ? copy.misc.yes : copy.misc.no}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                            {copy.federalSavers.questions.isDependent}
+                          </p>
+                          <div className="flex gap-2">
+                            {[true, false].map((value) => (
+                              <button
+                                key={`fsc-dependent-${value}`}
+                                type="button"
+                                onClick={() => setFscIsDependent(value)}
+                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                                  fscIsDependent === value
+                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                                }`}
+                              >
+                                {value ? copy.misc.yes : copy.misc.no}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={runFscEligibilityCheck}
+                          className="w-full rounded-full bg-[color:var(--theme-accent)] px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-accent-text)]"
+                        >
+                          {copy.buttons.checkEligibility}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                    <p>
+                      Please use the input fields on the left to plan for account
+                      activity and to check for Federal Savers Credit eligibility.
+                    </p>
+                    <p>
+                      The starting balance should either be an existing ABLE
+                      account balance or a qualified rollover from another plan.
+                      Upront contribution is what you currently have saved and plan
+                      to contribute at the time of account opening. You can also
+                      plan for monthly or annual recurring contributions. Up front
+                      and periodic contributions are assumed to occur and start in
+                      the current month. In addition, you can plan for monthly
+                      withdrawals. You have the ability to choose the month and
+                      year, in which those withdrawals shall start.
+                    </p>
+                    <p>
+                      You can also check to see if the beneficiary is eligible for
+                      Federal Savers Credit.
+                    </p>
+                  </div>
+                    </aside>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {step === 2 && (
+              <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+                <div className="flex h-full">
+                  <div className="flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-4 pt-3">
+                      <div className="flex min-h-[2.5rem] items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          Account Activity Information
+                        </p>
+                      </div>
+                      <div className="mt-0 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3">
+                          <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                            {copy.report.cards.startingBalance.label}
+                          </p>
+                          <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                            {currencyFormatterWhole.format(
+                              reportTotals.startingBalance,
+                            )}
+                          </p>
+                          <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                            {copy.report.cards.startingBalance.note}
+                          </p>
+                        </div>
+                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3">
+                        <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          {copy.report.cards.totalContributions.label}
+                        </p>
+                        <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                          {currencyFormatterWhole.format(
+                            reportTotals.totalContributions,
+                          )}
+                        </p>
+                        <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                          {copy.report.cards.totalContributions.note}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3">
+                        <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          {copy.report.cards.investmentEarnings.label}
+                        </p>
+                        <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                          {currencyFormatterWhole.format(reportTotals.totalEarnings)}
+                        </p>
+                        <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                          {copy.report.cards.investmentEarnings.note}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3">
+                        <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          {copy.report.cards.totalWithdrawals.label}
+                        </p>
+                        <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                          {currencyFormatterWhole.format(
+                            reportTotals.totalWithdrawals,
+                          )}
+                        </p>
+                        <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                          {copy.report.cards.totalWithdrawals.note}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3 sm:col-span-2">
+                        <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          {copy.report.cards.endingBalance.label}
+                        </p>
+                        <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                          {currencyFormatterWhole.format(reportTotals.endingBalance)}
+                        </p>
+                        <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                          {copy.report.cards.endingBalance.note}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="relative flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-0 pt-3">
+                    <div className="flex flex-wrap items-end justify-between gap-2">
+                      <div className="flex items-end gap-2 border-b border-[color:var(--theme-border)] pb-0">
+                        <button
+                          type="button"
+                          onClick={() => setShowAnnualReturns(false)}
+                          className={`rounded-t-xl border px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.2em] transition ${
+                            !showAnnualReturns
+                              ? "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)]"
+                              : "border-transparent text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                          }`}
+                        >
+                          {copy.report.cards.taxBenefits.label}
+                        </button>
+                        {!showAnnualReturns ? (
+                          <button
+                            type="button"
+                            aria-label={copy.report.taxBenefits.infoLabel}
+                            className="group relative flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)] transition hover:opacity-90 focus-visible:opacity-90"
+                          >
+                            i
+                            <span className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 w-56 rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                              {copy.report.taxBenefits.tooltip}
+                            </span>
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setShowAnnualReturns(true)}
+                          className={`rounded-t-xl border px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.2em] transition ${
+                            showAnnualReturns
+                              ? "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)]"
+                              : "border-transparent text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                          }`}
+                        >
+                          {copy.report.cards.averageAnnualReturns.label}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em]">
+                        <button
+                          type="button"
+                          onClick={() => setRightCardView("charts")}
+                          className={`rounded-full px-3 py-1 transition ${
+                            rightCardView === "charts"
+                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                              : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                          }`}
+                        >
+                          {copy.report.cards.viewToggle.charts}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRightCardView("tables")}
+                          className={`rounded-full px-3 py-1 transition ${
+                            rightCardView === "tables"
+                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                              : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                          }`}
+                        >
+                          {copy.report.cards.viewToggle.tables}
+                        </button>
+                      </div>
+                    </div>
+                    {!showAnnualReturns && copy.report.cards.taxBenefits.note ? (
+                      <p className="mt-0 text-xs text-[color:var(--theme-muted)]">
+                        {copy.report.cards.taxBenefits.note}
+                      </p>
+                    ) : null}
+                    <div className="mt-0 flex-1 flex flex-col justify-between">
+                      {showAnnualReturns ? (
+                        rightCardView === "charts" ? (
+                          <div className="flex flex-1 flex-col gap-0">
+                            <div className="flex justify-center">
+                              <p className="text-xs text-center uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                {copy.report.taxBenefits.returnImpactLabel}
+                              </p>
+                            </div>
+                            <div className="flex flex-1 flex-col gap-0">
+                              <div className="flex-1 min-h-0">
+                                <div className="mt-0" style={{ height: "16rem" }}>
+                                  <ReactECharts
+                                    option={returnsWaterfallOption}
+                                    notMerge
+                                    style={{ height: "100%", width: "100%" }}
+                                  />
+                                </div>
+                              </div>
+                              <div
+                                className="-mt-3 grid gap-0 text-center text-[1.375rem] font-semibold"
+                                style={{
+                                  fontFamily: "var(--theme-font-family)",
+                                  gridTemplateColumns: `repeat(${returnsWaterfallSteps.length}, minmax(0, 1fr))`,
+                                  paddingLeft: 64,
+                                  paddingRight: 20,
+                                }}
+                              >
+                                {returnsWaterfallSteps.map((step) => (
+                                  <span
+                                    key={`returns-value-${step.label}`}
+                                    style={{ color: step.color }}
+                                  >
+                                    {percentFormatter.format(step.value)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="mt-auto flex flex-wrap items-center gap-2 gap-y-1 px-1 pb-2 text-[0.65rem] uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
+                              {returnsWaterfallLegend.map((item) => {
+                                const isFederal = item.key === "federal-savers";
+                                return (
+                                  <div
+                                    key={`returns-legend-${item.label}`}
+                                    className={`flex items-center gap-2 ${isFederal ? "basis-full" : ""}`}
+                                  >
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full"
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                    <span>{item.label}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 grid gap-2 grid-cols-1">
+                            {averageAnnualReturnsTableItems.map((item) => (
+                              <div
+                                key={`average-returns-card-${item.key}`}
+                                className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3"
+                              >
+                                <div className="flex items-center justify-between gap-4">
+                                  <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                    {item.label}
+                                  </p>
+                                  <p
+                                    className="text-right text-2xl font-semibold"
+                                    style={{ color: item.color }}
+                                  >
+                                    {item.sign
+                                      ? `${item.sign}${percentFormatter.format(Math.abs(item.value))}`
+                                      : percentFormatter.format(item.value)}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : rightCardView === "charts" ? (
+                        <>
+                          {taxBenefitsPieOption ? (
+                            <div
+                              className="mt-0"
+                              style={{ height: "23rem" }}
+                              role="img"
+                              aria-describedby="tax-benefits-chart-desc"
+                            >
+                              <ReactECharts
+                                key={`tax-benefits-pie-${taxBenefitsPieOption?.series?.[0]?.label?.fontSize ?? "default"}-layout`}
+                                option={taxBenefitsPieOption}
+                                notMerge
+                                opts={{ renderer: "svg" }}
+                                style={{ height: "100%", width: "100%", padding: 0 }}
+                              />
+                            </div>
+                          ) : null}
+                          {totalTaxBenefitsItem ? (
+                            <div
+                              className="pointer-events-none absolute right-4 z-10 rounded-2xl border bg-[color:var(--theme-surface-1)] px-4 py-3 shadow-sm"
+                              style={{
+                                borderColor: "var(--theme-accent)",
+                                bottom: "1.25rem",
+                              }}
+                            >
+                              <p className="text-[0.55rem] uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                Total Tax Benefits
+                              </p>
+                              <p className="mt-1 text-xl font-semibold text-[color:var(--theme-accent)]">
+                                {currencyFormatterWhole.format(
+                                  totalTaxBenefitsItem.value,
+                                )}
+                              </p>
+                            </div>
+                          ) : null}
+                          <div id="tax-benefits-chart-desc" className="sr-only">
+                            {copy.report.taxBenefits.chartDescription}
+                          </div>
+                          <table className="sr-only">
+                            <caption>{copy.report.taxBenefits.table.caption}</caption>
+                            <thead>
+                              <tr>
+                                <th scope="col">
+                                  {copy.report.taxBenefits.table.categoryHeader}
+                                </th>
+                                <th scope="col">
+                                  {copy.report.taxBenefits.table.amountHeader}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {taxBenefitsItems.map((item) => (
+                                <tr key={`tax-benefits-row-${item.key}`}>
+                                  <th scope="row">{item.label}</th>
+                                  <td>{currencyFormatterWhole.format(item.value)}</td>
+                                </tr>
+                              ))}
+                              <tr>
+                                <th scope="row">
+                                  {copy.report.taxBenefits.table.totalLabel}
+                                </th>
+                                <td>
+                                  {currencyFormatterWhole.format(
+                                    totalTaxBenefitsItem.value,
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          {taxBenefitsTableItems.length ? (
+                            <div className="mt-[-4rem] grid gap-x-2 gap-y-1 pb-3 text-xs text-[color:var(--theme-muted)]">
+                              {taxBenefitsTableItems.map((item) => (
+                                <div
+                                  key={`tax-benefit-row-${item.key}`}
+                                  className="flex min-w-0 items-center gap-1"
+                                >
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: item.color }}
+                                  />
+                                  <span className="text-xs leading-tight text-[color:var(--theme-muted)] break-words">
+                                    {item.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {taxBenefitsItems.map((item) => (
+                            <div
+                              key={`tax-benefits-card-${item.key}`}
+                              className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3"
+                            >
+                              <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)] line-clamp-2">
+                                {item.label}
+                              </p>
+                              <p className="mt-[0.3rem] text-2xl font-semibold text-[color:var(--theme-accent)]">
+                                {currencyFormatterWhole.format(item.value)}
+                              </p>
+                              <p className="mt-2 text-xs text-[color:var(--theme-muted)] line-clamp-2">
+                                {item.note}
+                              </p>
+                            </div>
+                          ))}
+                          {totalTaxBenefitsItem ? (
+                            <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface-1)] px-4 py-3 sm:col-span-2">
+                              <p className="min-h-[2.5rem] text-xs uppercase tracking-[0.3em] text-[color:var(--theme-muted)] line-clamp-2 mb-2">
+                                TOTAL
+                              </p>
+                              <p className="text-2xl font-semibold text-[color:var(--theme-accent)]">
+                                {currencyFormatterWhole.format(
+                                  totalTaxBenefitsItem.value,
+                                )}
+                              </p>
+                              <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
+                                Total tax benefits
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedule(true)}
+                    className="rounded-full bg-[color:var(--theme-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-accent-text)] transition hover:opacity-90"
+                  >
+                    {copy.buttons.openSchedule}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </section>
+        )}
+      </div>
     </div>
   );
 }

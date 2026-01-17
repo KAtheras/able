@@ -1,0 +1,27 @@
+import { NextResponse } from "next/server";
+
+import { getDisclosures } from "../../../../data/disclosures";
+import type { DisclosurePayload } from "../../../../types/disclosures";
+
+const defaultLocale: DisclosurePayload["locale"] = "en-US";
+
+export async function GET(
+  _request: Request,
+  context: { params: { clientId: string } },
+) {
+  const clientId = context.params.clientId?.toUpperCase() ?? "";
+  const url = new URL(_request.url);
+  const localeParam = url.searchParams.get("locale");
+  const locale =
+    localeParam === "es-US" || localeParam === "en-US"
+      ? localeParam
+      : defaultLocale;
+  if (!clientId) {
+    return NextResponse.json(
+      { error: "Missing clientId." },
+      { status: 400 },
+    );
+  }
+  const payload = getDisclosures(clientId, locale);
+  return NextResponse.json(payload);
+}

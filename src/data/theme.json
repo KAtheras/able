@@ -1,0 +1,97 @@
+{
+  "base": {
+    "colors": {
+      "background": "#0b1120",
+      "foreground": "#f8fafc",
+      "surface": "#1f2937",
+      "muted": "#94a3b8",
+      "accent": "#34d399",
+      "accentText": "#0f172a",
+      "border": "#334155",
+      "warning": "#f59e0b",
+      "warningText": "#b45309",
+      "danger": "#fb7185",
+      "dangerText": "#be123c"
+    },
+    "typography": {
+      "fontFamily": "var(--font-geist-sans)",
+      "baseFontSize": "16px"
+    }
+  },
+  "state-ca": {
+    "colors": {
+      "background": "#f1f5f9",
+      "foreground": "#0f172a",
+      "surface": "#ffffff",
+      "muted": "#475569",
+      "accent": "#1d4ed8",
+      "accentText": "#f8fafc",
+      "border": "#cbd5f1",
+      "warning": "#f59e0b",
+      "warningText": "#92400e",
+      "danger": "#e11d48",
+      "dangerText": "#9f1239"
+    },
+    "typography": {
+      "fontFamily": "\"Source Serif 4\", Georgia, serif",
+      "baseFontSize": "17px"
+    }
+  },
+  "state-tx": {
+    "colors": {
+      "background": "#f8fafc",
+      "foreground": "#0f172a",
+      "surface": "#ffffff",
+      "muted": "#475569",
+      "accent": "#5b4b99",
+      "accentText": "#f8fafc",
+      "border": "#cbd5e1",
+      "warning": "#f59e0b",
+      "warningText": "#92400e",
+      "danger": "#dc2626",
+      "dangerText": "#991b1b"
+    },
+    "typography": {
+      "fontFamily": "var(--font-geist-sans)",
+      "baseFontSize": "16px"
+    }
+  },
+  "state-il": {
+    "colors": {
+      "background": "#ffffff",
+      "foreground": "#0b1b2b",
+      "surface": "#ffffff",
+      "muted": "#4b5563",
+      "accent": "#007dba",
+      "accentText": "#ffffff",
+      "border": "#d6dde8",
+      "warning": "#f59e0b",
+      "warningText": "#92400e",
+      "danger": "#dc2626",
+      "dangerText": "#991b1b"
+    },
+    "typography": {
+      "fontFamily": "var(--font-geist-sans)",
+      "baseFontSize": "16px"
+    }
+  },
+  "state-ut": {
+    "colors": {
+      "background": "#f1f5f9",
+      "foreground": "#0f172a",
+      "surface": "#ffffff",
+      "muted": "#475569",
+      "accent": "#5b4b99",
+      "accentText": "#f8fafc",
+      "border": "#d6dde8",
+      "warning": "#f59e0b",
+      "warningText": "#92400e",
+      "danger": "#dc2626",
+      "dangerText": "#991b1b"
+    },
+    "typography": {
+      "fontFamily": "var(--font-geist-sans)",
+      "baseFontSize": "16px"
+    }
+  }
+}
