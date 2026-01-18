@@ -3294,7 +3294,7 @@ export default function UiPreviewPage() {
                                   return (
                                     <div
                                       key={`returns-legend-${item.label}`}
-                                      className="flex items-center justify-between gap-3"
+                                      className="flex items-center justify-between gap-3 py-1"
                                     >
                                       <div className="flex items-center gap-3">
                                         <span
