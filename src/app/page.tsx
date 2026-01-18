@@ -26,6 +26,15 @@ const filingStatusValues = [
   "head_of_household",
 ] as const;
 const ssiBalanceLimit = 100000;
+const averageAnnualReturnsStackSeriesOrder = [
+  "state-taxes",
+  "federal-taxes",
+  "able-base",
+  "federal-savers",
+  "state-deduction",
+];
+const taxBenefitsPalette = ["#3A7FBE", "#F2A65A", "#6BCB77", "#C06C84"];
+const averageAnnualReturnsChartRange = 0.25;
 
 function parseNumber(value: string) {
   const parsed = Number(value);
@@ -245,10 +254,6 @@ export default function UiPreviewPage() {
     const theme = getThemeForClient(selectedClientId);
     return themeToCssVars(theme);
   }, [selectedClientId]);
-  const taxBenefitsAccent =
-    selectedClientId === "state-il" ? "#F38B57" : "var(--theme-accent)";
-  const chartAccentColor =
-    (themeVars["--theme-accent"] as string | undefined) ?? "#2E8BC0";
   const planStateCode = getPlanStateCodeForClient(selectedClientId);
   const planMaxBalance = planStateCode
     ? getStatePlanInfo(planStateCode).maxAccountBalance ?? null
@@ -264,8 +269,20 @@ export default function UiPreviewPage() {
   const annualLimit = getAnnualContributionLimit(currentYear);
   const horizonYears = Math.min(
     50,
-    Math.max(0, Math.round(parseNumber(timeHorizonYears))),
+    Math.max(1, Math.round(parseNumber(timeHorizonYears))),
   );
+  const horizonEndDate = useMemo(() => {
+    const months = horizonYears * 12;
+    const end = new Date(currentYear, currentMonthIndex + months - 1);
+    return {
+      month: String(end.getMonth() + 1).padStart(2, "0"),
+      year: end.getFullYear().toString(),
+    };
+  }, [currentYear, currentMonthIndex, horizonYears]);
+  useEffect(() => {
+    setContributionEndMonth(horizonEndDate.month);
+    setContributionEndYear(horizonEndDate.year);
+  }, [horizonEndDate.month, horizonEndDate.year]);
   const minWithdrawalYear = currentYear;
   const maxWithdrawalYear = currentYear + horizonYears;
   const beneficiaryUpfrontAmount = parseNumber(beneficiaryUpfrontContribution);
@@ -398,22 +415,6 @@ export default function UiPreviewPage() {
         style: "percent",
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }),
-    [copy.locale],
-  );
-  const percentFormatterWhole = useMemo(
-    () =>
-      new Intl.NumberFormat(copy.locale, {
-        style: "percent",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }),
-    [copy.locale],
-  );
-  const wholeNumberFormatter = useMemo(
-    () =>
-      new Intl.NumberFormat(copy.locale, {
-        maximumFractionDigits: 0,
       }),
     [copy.locale],
   );
@@ -1000,6 +1001,44 @@ export default function UiPreviewPage() {
     flows[flows.length - 1] += reportTotals.endingBalance;
     return flows;
   }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
+  const federalTaxCashflows = useMemo(() => {
+    if (filteredScheduleRows.length === 0) {
+      return [];
+    }
+    const flows = Array.from({ length: filteredScheduleRows.length + 1 }).map(
+      () => 0,
+    );
+    flows[1] -= reportTotals.startingBalance;
+    filteredScheduleRows.forEach((row, index) => {
+      if (row.monthIndex === 0) {
+        flows[index + 1] -= row.contributions;
+      } else {
+        flows[index] -= row.contributions;
+      }
+      flows[index + 1] += row.withdrawals - row.rowFederalTax;
+    });
+    flows[flows.length - 1] += reportTotals.endingBalance;
+    return flows;
+  }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
+  const stateTaxCashflows = useMemo(() => {
+    if (filteredScheduleRows.length === 0) {
+      return [];
+    }
+    const flows = Array.from({ length: filteredScheduleRows.length + 1 }).map(
+      () => 0,
+    );
+    flows[1] -= reportTotals.startingBalance;
+    filteredScheduleRows.forEach((row, index) => {
+      if (row.monthIndex === 0) {
+        flows[index + 1] -= row.contributions;
+      } else {
+        flows[index] -= row.contributions;
+      }
+      flows[index + 1] += row.withdrawals - row.rowStateTax;
+    });
+    flows[flows.length - 1] += reportTotals.endingBalance;
+    return flows;
+  }, [filteredScheduleRows, reportTotals.endingBalance, reportTotals.startingBalance]);
   const monthlyIrrAble = useMemo(
     () => calculateMonthlyIrr(ableCashflows),
     [ableCashflows],
@@ -1020,6 +1059,14 @@ export default function UiPreviewPage() {
     () => calculateMonthlyIrr(stateDeductionCashflows),
     [stateDeductionCashflows],
   );
+  const monthlyIrrFederalTaxes = useMemo(
+    () => calculateMonthlyIrr(federalTaxCashflows),
+    [federalTaxCashflows],
+  );
+  const monthlyIrrStateTaxes = useMemo(
+    () => calculateMonthlyIrr(stateTaxCashflows),
+    [stateTaxCashflows],
+  );
   const averageAnnualReturnTaxable = Math.pow(1 + monthlyIrrTaxable, 12) - 1;
   const averageAnnualReturnBase = Math.pow(1 + monthlyIrrBase, 12) - 1;
   const averageAnnualReturnAble = averageAnnualReturnBase;
@@ -1027,6 +1074,10 @@ export default function UiPreviewPage() {
     Math.pow(1 + monthlyIrrFederalSavers, 12) - 1;
   const averageAnnualReturnStateDeduction =
     Math.pow(1 + monthlyIrrStateDeduction, 12) - 1;
+  const averageAnnualReturnFederalTaxes =
+    Math.pow(1 + monthlyIrrFederalTaxes, 12) - 1;
+  const averageAnnualReturnStateTaxes =
+    Math.pow(1 + monthlyIrrStateTaxes, 12) - 1;
   const averageAnnualReturnFederalSaversImpact =
     averageAnnualReturnFederalSavers - averageAnnualReturnBase;
   const averageAnnualReturnStateDeductionImpact =
@@ -1039,32 +1090,13 @@ export default function UiPreviewPage() {
     averageAnnualReturnBase +
     (hasStateDeductionImpact ? averageAnnualReturnStateDeductionImpact : 0) +
     (hasFederalSaversImpact ? averageAnnualReturnFederalSaversImpact : 0);
-  const averageAnnualReturnTaxImpact =
-    averageAnnualReturnTaxable - averageAnnualReturnAbleTotal;
+  const averageAnnualReturnFederalTaxesImpact =
+    averageAnnualReturnFederalTaxes - averageAnnualReturnBase;
+  const averageAnnualReturnStateTaxesImpact =
+    averageAnnualReturnStateTaxes - averageAnnualReturnBase;
 
   const averageAnnualReturnsTableItems = useMemo(
     () => [
-      {
-        key: "able-base",
-        label: copy.report.cards.averageAnnualReturnsTable.items.ableBase,
-        value: averageAnnualReturnBase,
-        sign: "",
-        color: "#F2A65A",
-      },
-      {
-        key: "state-deduction",
-        label: copy.report.cards.averageAnnualReturnsTable.items.stateDeduction,
-        value: averageAnnualReturnStateDeductionImpact,
-        sign: "+",
-        color: "#6BCB77",
-      },
-      {
-        key: "federal-savers",
-        label: copy.report.cards.averageAnnualReturnsTable.items.federalSavers,
-        value: averageAnnualReturnFederalSaversImpact,
-        sign: "+",
-        color: "#C06C84",
-      },
       {
         key: "able-total",
         label: copy.report.cards.averageAnnualReturnsTable.items.ableTotal,
@@ -1073,11 +1105,39 @@ export default function UiPreviewPage() {
         color: "#2E8BC0",
       },
       {
-        key: "taxes-on-earnings",
-        label: copy.report.cards.averageAnnualReturnsTable.items.taxesOnEarnings,
-        value: averageAnnualReturnTaxImpact,
+        key: "state-deduction",
+        label: copy.report.cards.averageAnnualReturnsTable.items.stateDeduction,
+        value: averageAnnualReturnStateDeductionImpact,
+        sign: "+",
+        color: taxBenefitsPalette[3],
+      },
+      {
+        key: "federal-savers",
+        label: copy.report.cards.averageAnnualReturnsTable.items.federalSavers,
+        value: averageAnnualReturnFederalSaversImpact,
+        sign: "+",
+        color: taxBenefitsPalette[2],
+      },
+      {
+        key: "able-base",
+        label: copy.report.cards.averageAnnualReturnsTable.items.ableBase,
+        value: averageAnnualReturnBase,
+        sign: "",
+        color: "#7F8C8D",
+      },
+      {
+        key: "federal-taxes",
+        label: copy.report.cards.averageAnnualReturnsTable.items.federalTaxesOnEarnings,
+        value: averageAnnualReturnFederalTaxesImpact,
         sign: "-",
-        color: "#F38B57",
+        color: taxBenefitsPalette[0],
+      },
+      {
+        key: "state-taxes",
+        label: copy.report.cards.averageAnnualReturnsTable.items.stateTaxesOnEarnings,
+        value: averageAnnualReturnStateTaxesImpact,
+        sign: "-",
+        color: taxBenefitsPalette[1],
       },
       {
         key: "taxable",
@@ -1092,167 +1152,146 @@ export default function UiPreviewPage() {
       averageAnnualReturnBase,
       averageAnnualReturnFederalSaversImpact,
       averageAnnualReturnStateDeductionImpact,
-      averageAnnualReturnTaxImpact,
+      averageAnnualReturnFederalTaxesImpact,
+      averageAnnualReturnStateTaxesImpact,
       averageAnnualReturnTaxable,
       copy.report.cards.averageAnnualReturnsTable.items,
     ],
   );
 
-  const averageAnnualReturnsLabels =
-    copy.report.cards.averageAnnualReturnsTable.items;
-  const returnsWaterfallSteps = useMemo(() => {
-    const ableBase = averageAnnualReturnBase;
-    const stateImpact = averageAnnualReturnStateDeductionImpact;
-    const federalImpact = averageAnnualReturnFederalSaversImpact;
-    const ableTotal =
-      ableBase +
-      (hasStateDeductionImpact ? stateImpact : 0) +
-      (hasFederalSaversImpact ? federalImpact : 0);
-    const taxableReturn = averageAnnualReturnTaxable;
-    const hasTaxImpact = Math.abs(averageAnnualReturnTaxImpact) > 0.000001;
-    return [
+  const averageAnnualReturnsStackData = useMemo(
+    () => [
       {
-        label: averageAnnualReturnsLabels.ableBase,
-        value: ableBase,
-        offset: 0,
-        color: "#F2A65A",
+        key: "state-deduction",
+        label: copy.report.cards.averageAnnualReturnsTable.items.stateDeduction,
+        value: averageAnnualReturnStateDeductionImpact,
+        color: taxBenefitsPalette[3],
+      },
+      {
+        key: "federal-savers",
+        label: copy.report.cards.averageAnnualReturnsTable.items.federalSavers,
+        value: averageAnnualReturnFederalSaversImpact,
+        color: taxBenefitsPalette[2],
+      },
+      {
         key: "able-base",
+        label: copy.report.cards.averageAnnualReturnsTable.items.ableBase,
+        value: averageAnnualReturnBase,
+        color: "#7F8C8D",
       },
-      ...(hasStateDeductionImpact
-        ? [
-            {
-              label: averageAnnualReturnsLabels.stateDeduction,
-              value: stateImpact,
-              offset: ableBase,
-              color: "#6BCB77",
-              key: "state-deduction",
-            },
-          ]
-        : []),
-      ...(hasFederalSaversImpact
-        ? [
-          {
-            label: averageAnnualReturnsLabels.federalSavers,
-            value: federalImpact,
-            offset:
-              ableBase +
-              (hasStateDeductionImpact ? stateImpact : 0),
-            color: "#C06C84",
-            key: "federal-savers",
-          },
-        ]
-      : []),
       {
-        label: averageAnnualReturnsLabels.ableTotal,
-        value: ableTotal,
-        offset: 0,
-        color: "#2E8BC0",
-        key: "able-total",
+        key: "federal-taxes",
+        label: copy.report.cards.averageAnnualReturnsTable.items.federalTaxesOnEarnings,
+        value: averageAnnualReturnFederalTaxesImpact,
+        color: taxBenefitsPalette[0],
       },
-      ...(hasTaxImpact
-        ? [
-            {
-              label: averageAnnualReturnsLabels.taxesOnEarnings,
-              value: averageAnnualReturnTaxImpact,
-              offset: ableTotal,
-              color: "#F38B57",
-              key: "taxes-on-earnings",
-            },
-          ]
-        : []),
       {
-        label: averageAnnualReturnsLabels.taxable,
-        value: taxableReturn,
-        offset: 0,
-        color: "#7A6FF0",
-        key: "taxable",
+        key: "state-taxes",
+        label: copy.report.cards.averageAnnualReturnsTable.items.stateTaxesOnEarnings,
+        value: averageAnnualReturnStateTaxesImpact,
+        color: taxBenefitsPalette[1],
       },
-    ];
-  }, [
-    averageAnnualReturnAbleTotal,
-    averageAnnualReturnBase,
-    averageAnnualReturnFederalSaversImpact,
-    averageAnnualReturnStateDeductionImpact,
-    averageAnnualReturnTaxImpact,
-    averageAnnualReturnTaxable,
-    averageAnnualReturnsLabels.ableBase,
-    averageAnnualReturnsLabels.ableTotal,
-    averageAnnualReturnsLabels.federalSavers,
-    averageAnnualReturnsLabels.stateDeduction,
-    averageAnnualReturnsLabels.taxable,
-    averageAnnualReturnsLabels.taxesOnEarnings,
-    hasFederalSaversImpact,
-    hasStateDeductionImpact,
-  ]);
-  const returnsWaterfallLegend = useMemo(
+    ],
+    [
+      averageAnnualReturnBase,
+      averageAnnualReturnFederalSaversImpact,
+      averageAnnualReturnStateDeductionImpact,
+      averageAnnualReturnFederalTaxesImpact,
+      averageAnnualReturnStateTaxesImpact,
+      copy.report.cards.averageAnnualReturnsTable.items,
+    ],
+  );
+  const averageAnnualReturnsStackLegend = useMemo(
     () =>
-      returnsWaterfallSteps.map((step) => ({
+      averageAnnualReturnsStackData.map((step) => ({
         key: step.key,
         label: step.label,
         color: step.color,
+        value: step.value,
       })),
-    [returnsWaterfallSteps],
+    [averageAnnualReturnsStackData],
   );
-  const returnsWaterfallOption = useMemo(() => {
-    const categories = returnsWaterfallSteps.map((step) => step.label);
-    const offsets = returnsWaterfallSteps.map((step) => step.offset);
-    const values = returnsWaterfallSteps.map((step) => step.value);
+  const averageAnnualReturnsStackSeries = useMemo(
+    () =>
+      averageAnnualReturnsStackSeriesOrder
+        .map((key) =>
+          averageAnnualReturnsStackData.find((step) => step.key === key),
+        )
+        .filter((step): step is typeof averageAnnualReturnsStackData[number] =>
+          Boolean(step),
+        ),
+    [averageAnnualReturnsStackData],
+  );
+  const positiveStackSum = averageAnnualReturnsStackData
+    .filter((step) => step.value > 0)
+    .reduce((sum, step) => sum + step.value, 0);
+  const negativeStackSum = averageAnnualReturnsStackData
+    .filter((step) => step.value < 0)
+    .reduce((sum, step) => sum + Math.abs(step.value), 0);
+  const positiveScale =
+    positiveStackSum > 0 ? averageAnnualReturnsChartRange / positiveStackSum : 0;
+  const negativeScale =
+    negativeStackSum > 0 ? averageAnnualReturnsChartRange / negativeStackSum : 0;
+  const averageAnnualReturnsStackOption = useMemo(() => {
     return {
       tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "shadow" },
-        valueFormatter: (value: number) => percentFormatter.format(value),
+        trigger: "item",
+        formatter: (params: {
+          seriesName: string;
+          value: number;
+          data: { actual: number };
+        }) => {
+          const actual = params.data?.actual ?? params.value;
+          return `${params.seriesName}: ${percentFormatter.format(actual)}`;
+        },
       },
-      grid: { left: 20, right: 20, top: 30, bottom: 12, containLabel: true },
+      grid: {
+        left: "60%",
+        right: "6%",
+        top: "4%",
+        bottom: "4%",
+        containLabel: true,
+      },
       xAxis: {
         type: "category",
-        data: categories,
-        axisLine: { lineStyle: { color: "var(--theme-border)" } },
-        axisLabel: {
-          show: false,
-        },
+        data: [""],
+        axisTick: { show: false },
+        axisLine: { show: false },
+        axisLabel: { show: false },
       },
       yAxis: {
         type: "value",
+        axisTick: { show: false },
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: "#B7B7B7" } },
-        axisLabel: {
-          color: "var(--theme-muted)",
-          fontFamily: "var(--theme-font-family)",
-          formatter: (value: number) => percentFormatter.format(value),
-        },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        min: -averageAnnualReturnsChartRange,
+        max: averageAnnualReturnsChartRange,
       },
-      series: [
-        {
-          name: copy.report.taxBenefits.waterfallSeries.offset,
+      series: averageAnnualReturnsStackSeries.map((step) => {
+        const scaledValue =
+          step.value >= 0
+            ? step.value * positiveScale
+            : step.value * negativeScale;
+        return {
+          name: step.label,
           type: "bar",
-          stack: "return",
-          silent: true,
-          itemStyle: { color: "transparent" },
-          data: offsets,
-        },
-        {
-          name: copy.report.taxBenefits.waterfallSeries.return,
-          type: "bar",
-          stack: "return",
-          label: { show: false },
-          data: values.map((value, index) => ({
-            value,
-            itemStyle: { color: returnsWaterfallSteps[index]?.color ?? "#F2A65A" },
-          })),
-        },
-      ],
+          stack: "returns",
+          barWidth: "80%",
+          emphasis: { focus: "series" },
+          itemStyle: { color: step.color },
+          data: [{ value: scaledValue, actual: step.value }],
+        };
+      }),
     };
   }, [
-    chartAccentColor,
+    averageAnnualReturnsStackSeries,
     percentFormatter,
-    returnsWaterfallSteps,
-    wholeNumberFormatter,
-    copy.report.taxBenefits.waterfallSeries,
+    positiveScale,
+    negativeScale,
   ]);
 
 
-  const taxBenefitsPalette = ["#3A7FBE", "#F2A65A", "#6BCB77", "#C06C84"];
   const taxBenefitsItems = useMemo(() => {
     const totals = {
       federalTax: filteredMonthlyTotals.federalTax,
@@ -1290,7 +1329,7 @@ export default function UiPreviewPage() {
         color: taxBenefitsPalette[3],
       },
     ];
-  }, [filteredMonthlyTotals, copy.report.taxBenefits.items, taxBenefitsPalette]);
+  }, [filteredMonthlyTotals, copy.report.taxBenefits.items]);
   const taxBenefitsTableItems = useMemo(() => {
     const order = ["federalTax", "stateTax", "federalSavers", "stateDeduction"];
     const byKey = new Map(taxBenefitsItems.map((item) => [item.key, item]));
@@ -3226,57 +3265,72 @@ export default function UiPreviewPage() {
                     <div className="mt-0 flex-1 flex flex-col justify-between">
                       {showAnnualReturns ? (
                         rightCardView === "charts" ? (
-                          <div className="flex flex-1 flex-col gap-0">
-                            <div className="flex justify-center">
-                              <p className="text-xs text-center uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                {copy.report.taxBenefits.returnImpactLabel}
-                              </p>
-                            </div>
-                            <div className="flex flex-1 flex-col gap-0">
-                              <div className="flex-1 min-h-0">
-                                <div className="mt-0" style={{ height: "16rem" }}>
-                                  <ReactECharts
-                                    option={returnsWaterfallOption}
-                                    notMerge
-                                    style={{ height: "100%", width: "100%" }}
-                                  />
-                                </div>
+                          <div className="flex flex-1 flex-col gap-0" style={{ minHeight: 0 }}>
+                          <div className="flex flex-1 gap-4 relative">
+                              <div className="absolute top-6 left-4 right-4 hidden flex items-center justify-between gap-2 rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 py-1 text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-accent)] sm:flex">
+                                <span className="text-[0.8rem] font-semibold tracking-[0.3em]">
+                                  {copy.report.taxBenefits.returnImpactLabel}
+                                </span>
+                                <span className="text-[0.95rem] font-bold tracking-[0.25em]">
+                                  {percentFormatter.format(averageAnnualReturnAbleTotal)}
+                                </span>
                               </div>
-                              <div
-                                className="-mt-3 grid gap-0 text-center text-[1.375rem] font-semibold"
-                                style={{
-                                  fontFamily: "var(--theme-font-family)",
-                                  gridTemplateColumns: `repeat(${returnsWaterfallSteps.length}, minmax(0, 1fr))`,
-                                  paddingLeft: 64,
-                                  paddingRight: 20,
-                                }}
-                              >
-                                {returnsWaterfallSteps.map((step) => (
-                                  <span
-                                    key={`returns-value-${step.label}`}
-                                    style={{ color: step.color }}
-                                  >
-                                    {percentFormatter.format(step.value)}
-                                  </span>
-                                ))}
+                              <div className="absolute bottom-6 left-4 right-4 hidden flex items-center justify-between rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 py-1 text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-accent)] sm:flex">
+                                <span className="text-[0.8rem] font-semibold tracking-[0.3em]">
+                                  {copy.report.cards.taxBenefits.label}
+                                </span>
+                                <span className="text-[0.95rem] font-bold tracking-[0.25em] text-[color:var(--theme-accent)]">
+                                  {percentFormatter.format(averageAnnualReturnTaxable)}
+                                </span>
                               </div>
-                            </div>
-                            <div className="mt-auto flex flex-wrap items-center gap-2 gap-y-1 px-1 pb-2 text-[0.65rem] uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
-                              {returnsWaterfallLegend.map((item) => {
-                                const isFederal = item.key === "federal-savers";
-                                return (
-                                  <div
-                                    key={`returns-legend-${item.label}`}
-                                    className={`flex items-center gap-2 ${isFederal ? "basis-full" : ""}`}
-                                  >
-                                    <span
-                                      className="h-2.5 w-2.5 rounded-full"
-                                      style={{ backgroundColor: item.color }}
-                                    />
-                                    <span>{item.label}</span>
+                              <div className="flex flex-1 min-w-[9rem] flex-col justify-center gap-3 text-[0.75rem] uppercase tracking-[0.08em] text-[color:var(--theme-muted)]">
+                                {averageAnnualReturnsStackLegend.map((item) => {
+                                  const sign =
+                                    item.value > 0
+                                      ? "+"
+                                      : item.value < 0
+                                      ? "-"
+                                      : "";
+                                  return (
+                                    <div
+                                      key={`returns-legend-${item.label}`}
+                                      className="flex items-center justify-between gap-3"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span
+                                          className="inline-flex h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                                          style={{ backgroundColor: item.color }}
+                                        />
+                                        <span className="text-[0.8rem] whitespace-nowrap">
+                                          {item.label}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className="text-[1rem] font-bold tracking-[0.2em] whitespace-nowrap"
+                                        style={{ color: item.color }}
+                                      >
+                                        {sign}
+                                        {percentFormatter.format(Math.abs(item.value))}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                                <div className="flex flex-1 flex-col gap-1 relative" style={{ minHeight: 0 }}>
+                                  <div className="flex-1 min-h-0">
+                                    <div className="mt-0 h-full">
+                                      <ReactECharts
+                                        option={averageAnnualReturnsStackOption}
+                                        notMerge
+                                        style={{
+                                          height: "76%",
+                                          width: "100%",
+                                          marginTop: "3rem",
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                );
-                              })}
+                                </div>
                             </div>
                           </div>
                         ) : (

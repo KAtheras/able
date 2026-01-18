@@ -166,7 +166,7 @@ export const uiPreviewCopy = {
       taxBenefits: {
         tooltip: "Tax benefits details.",
         infoLabel: "Tax benefits info",
-        returnImpactLabel: "ABLE vs taxable return impact",
+        returnImpactLabel: "Adjusted able account return",
         chartDescription:
           "Tax benefits breakdown with amounts listed by category below.",
         waterfallLabels: {
