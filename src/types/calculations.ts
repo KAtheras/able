@@ -29,6 +29,8 @@ export type CalculationInput = {
   fscEffectiveFilingStatus: string;
   fscEffectiveAgi: number;
   fscEligibleCriteriaMet: boolean;
+  contributionEndMonth?: number | null;
+  contributionEndYear?: number | null;
 };
 
 export type CalculationResult = {
@@ -39,4 +41,5 @@ export type CalculationResult = {
   fscCreditRate: number;
   fscEligibleForCredit: boolean;
   fscContributionLimit: number;
+  ssiExceededAfterContributionEndDate: boolean;
 };

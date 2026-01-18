@@ -177,6 +177,12 @@ export default function UiPreviewPage() {
   const [beneficiaryRecurringCadence, setBeneficiaryRecurringCadence] = useState<
     (typeof cadenceOptions)[number]
   >("monthly");
+  const [contributionEndMonth, setContributionEndMonth] = useState(() =>
+    String(new Date().getMonth() + 1).padStart(2, "0"),
+  );
+  const [contributionEndYear, setContributionEndYear] = useState(
+    new Date().getFullYear().toString(),
+  );
 
   const [workToAbleDecision, setWorkToAbleDecision] = useState<
     "undecided" | "yes" | "no"
@@ -195,6 +201,8 @@ export default function UiPreviewPage() {
   const [monthlyWithdrawalStartYear, setMonthlyWithdrawalStartYear] =
     useState(new Date().getFullYear().toString());
   const [showMonthlyWithdrawalPicker, setShowMonthlyWithdrawalPicker] =
+    useState(false);
+  const [showContributionEndPicker, setShowContributionEndPicker] =
     useState(false);
   const [withdrawalPlanDecision, setWithdrawalPlanDecision] = useState(true);
   const [showFscEligibility, setShowFscEligibility] = useState(false);
@@ -227,6 +235,9 @@ export default function UiPreviewPage() {
   const monthWheelRef = useRef<HTMLDivElement | null>(null);
   const yearWheelRef = useRef<HTMLDivElement | null>(null);
   const monthlyPickerRef = useRef<HTMLDivElement | null>(null);
+  const contributionMonthWheelRef = useRef<HTMLDivElement | null>(null);
+  const contributionYearWheelRef = useRef<HTMLDivElement | null>(null);
+  const contributionPickerRef = useRef<HTMLDivElement | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [hasHydrated] = useState(true);
 
@@ -431,6 +442,10 @@ export default function UiPreviewPage() {
     monthlyWithdrawalMonths.find(
       (month) => month.value === monthlyWithdrawalStartMonth,
     )?.label ?? copy.selectMonthPlaceholder;
+  const contributionEndMonthLabel =
+    monthlyWithdrawalMonths.find(
+      (month) => month.value === contributionEndMonth,
+    )?.label ?? copy.selectMonthPlaceholder;
 
   useEffect(() => {
     const parsed = Number.parseInt(monthlyWithdrawalStartYear, 10);
@@ -444,6 +459,23 @@ export default function UiPreviewPage() {
     }
   }, [
     monthlyWithdrawalStartYear,
+    currentYear,
+    maxWithdrawalYear,
+    minWithdrawalYear,
+  ]);
+
+  useEffect(() => {
+    const parsed = Number.parseInt(contributionEndYear, 10);
+    const baseYear = Number.isNaN(parsed) ? currentYear : parsed;
+    const bounded = Math.min(
+      maxWithdrawalYear,
+      Math.max(minWithdrawalYear, baseYear),
+    );
+    if (String(bounded) !== contributionEndYear) {
+      setContributionEndYear(String(bounded));
+    }
+  }, [
+    contributionEndYear,
     currentYear,
     maxWithdrawalYear,
     minWithdrawalYear,
@@ -503,8 +535,10 @@ export default function UiPreviewPage() {
   const fscEffectiveAgi = parseNumber(accountAGI);
   const fscHasAgi = fscEffectiveAgi > 0;
 
-  const calcInput = useMemo<CalculationInput>(
-    () => ({
+  const calcInput = useMemo<CalculationInput>(() => {
+    const parsedContributionEndMonth = Number.parseInt(contributionEndMonth, 10);
+    const parsedContributionEndYear = Number.parseInt(contributionEndYear, 10);
+    return {
       startingBalance,
       beneficiaryUpfrontContribution,
       beneficiaryRecurringContribution,
@@ -524,29 +558,36 @@ export default function UiPreviewPage() {
       fscEffectiveFilingStatus,
       fscEffectiveAgi,
       fscEligibleCriteriaMet,
-    }),
-    [
-      startingBalance,
-      beneficiaryUpfrontContribution,
-      beneficiaryRecurringContribution,
-      beneficiaryRecurringCadence,
-      monthlyWithdrawalAmount,
-      monthlyWithdrawalStartMonth,
-      monthlyWithdrawalStartYear,
-      withdrawalPlanDecision,
-      annualReturnOverride,
-      timeHorizonYears,
-      currentYear,
-      planMaxBalance,
-      isSsiBeneficiary,
-      filingStatus,
-      accountAGI,
-      stateCode,
-      fscEffectiveFilingStatus,
-      fscEffectiveAgi,
-      fscEligibleCriteriaMet,
-    ],
-  );
+      contributionEndMonth: Number.isFinite(parsedContributionEndMonth)
+        ? parsedContributionEndMonth
+        : null,
+      contributionEndYear: Number.isFinite(parsedContributionEndYear)
+        ? parsedContributionEndYear
+        : null,
+    };
+  }, [
+    startingBalance,
+    beneficiaryUpfrontContribution,
+    beneficiaryRecurringContribution,
+    beneficiaryRecurringCadence,
+    monthlyWithdrawalAmount,
+    monthlyWithdrawalStartMonth,
+    monthlyWithdrawalStartYear,
+    withdrawalPlanDecision,
+    annualReturnOverride,
+    timeHorizonYears,
+    currentYear,
+    planMaxBalance,
+    isSsiBeneficiary,
+    filingStatus,
+    accountAGI,
+    stateCode,
+    fscEffectiveFilingStatus,
+    fscEffectiveAgi,
+    fscEligibleCriteriaMet,
+    contributionEndMonth,
+    contributionEndYear,
+  ]);
 
   useEffect(() => {
     let isActive = true;
@@ -1519,6 +1560,8 @@ export default function UiPreviewPage() {
     ...monthlyWithdrawalYears,
     ...Array.from({ length: wheelPadding }).map(() => null),
   ];
+  const contributionMonthWheelItems = monthWheelItems;
+  const contributionYearWheelItems = yearWheelItems;
   const snapMonthWheel = (target: HTMLDivElement | null, index: number) => {
     if (!target) {
       return;
@@ -1573,6 +1616,38 @@ export default function UiPreviewPage() {
   ]);
 
   useEffect(() => {
+    if (!showContributionEndPicker) {
+      return;
+    }
+    const monthIndex = Math.max(
+      0,
+      monthlyWithdrawalMonths.findIndex(
+        (month) => month.value === contributionEndMonth,
+      ),
+    );
+    const yearIndex = Math.max(
+      0,
+      monthlyWithdrawalYears.findIndex((year) => year === contributionEndYear),
+    );
+    if (contributionMonthWheelRef.current) {
+      contributionMonthWheelRef.current.scrollTo({
+        top: (monthIndex + wheelPadding) * wheelItemHeight,
+      });
+    }
+    if (contributionYearWheelRef.current) {
+      contributionYearWheelRef.current.scrollTo({
+        top: (yearIndex + wheelPadding) * wheelItemHeight,
+      });
+    }
+  }, [
+    showContributionEndPicker,
+    monthlyWithdrawalMonths,
+    monthlyWithdrawalYears,
+    contributionEndMonth,
+    contributionEndYear,
+  ]);
+
+  useEffect(() => {
     if (!showMonthlyWithdrawalPicker) {
       return;
     }
@@ -1594,7 +1669,29 @@ export default function UiPreviewPage() {
   }, [showMonthlyWithdrawalPicker]);
 
   useEffect(() => {
+    if (!showContributionEndPicker) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !contributionPickerRef.current) {
+        return;
+      }
+      if (!contributionPickerRef.current.contains(target)) {
+        setShowContributionEndPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [showContributionEndPicker]);
+
+  useEffect(() => {
     setShowMonthlyWithdrawalPicker(false);
+    setShowContributionEndPicker(false);
   }, [step, showSchedule]);
 
   const actionControls = (
@@ -2129,7 +2226,7 @@ export default function UiPreviewPage() {
                       </label>
                     </div>
                   </div>
-                  <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 text-xs text-[color:var(--theme-muted)]">
+                  <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5">
                     {residencyWarningMessage && (
                       <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
                         <span>{residencyWarningMessage}</span>
@@ -2147,8 +2244,12 @@ export default function UiPreviewPage() {
                         </button>
                       </div>
                     )}
-                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
-                      {copy.misc.disclosurePlaceholder}
+                    <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                      {copy.misc.disclosureCards.demographics.map(
+                        (paragraph, index) => (
+                          <p key={`demographics-${index}`}>{paragraph}</p>
+                        ),
+                      )}
                     </div>
                   </aside>
                 </div>
@@ -2160,20 +2261,10 @@ export default function UiPreviewPage() {
                     <div className="flex min-h-0 flex-col">
                       <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
                         <div className="space-y-4">
-                          <div className="grid gap-4 sm:grid-cols-1">
+                          <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
                             <div className="space-y-2">
-                              <p className="inline-flex items-center gap-2 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                                 {copy.labels.startingBalance}
-                            <button
-                              type="button"
-                              aria-label={copy.accessibility.startingBalanceInfo}
-                              className="group relative flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)]/65 text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)]"
-                            >
-                              i
-                              <span className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 w-64 rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                                {copy.tooltips.startingBalance}
-                              </span>
-                            </button>
                               </p>
                               <input
                                 className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
@@ -2183,11 +2274,6 @@ export default function UiPreviewPage() {
                                 }
                               />
                             </div>
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-3">
-                            <p className="sm:col-span-3 text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                              {copy.labels.contributionsParent}
-                            </p>
                             <div className="space-y-2">
                               <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                                 {copy.labels.upfrontContribution}
@@ -2200,6 +2286,11 @@ export default function UiPreviewPage() {
                                 }
                               />
                             </div>
+                          </div>
+                          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                            {copy.labels.contributionsParent}
+                          </p>
+                          <div className="grid gap-4 sm:grid-cols-3 items-end">
                             <div className="space-y-2">
                               <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                                 {copy.labels.recurringContribution}
@@ -2231,6 +2322,152 @@ export default function UiPreviewPage() {
                                   </option>
                                 ))}
                               </select>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.contributionEndDate}
+                              </p>
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setShowContributionEndPicker((prev) => !prev)
+                                  }
+                                  className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
+                                >
+                                  <span>
+                                    {contributionEndMonthLabel} {contributionEndYear}
+                                  </span>
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 text-[color:var(--theme-muted)]"
+                                  >
+                                    <path
+                                      d="M6 9l6 6 6-6"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                                {showContributionEndPicker && (
+                                  <div
+                                    ref={contributionPickerRef}
+                                    className="absolute left-0 right-0 bottom-full z-10 mb-2 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg"
+                                  >
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <div className="space-y-2">
+                                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                          {copy.labels.month}
+                                        </p>
+                                        <div className="relative">
+                                          <div
+                                            ref={contributionMonthWheelRef}
+                                            className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                            style={{
+                                              height: wheelVisibleItems * wheelItemHeight,
+                                              scrollSnapType: "y mandatory",
+                                              paddingTop: wheelItemHeight,
+                                              paddingBottom: wheelItemHeight / 2,
+                                            }}
+                                          >
+                                            {contributionMonthWheelItems.map(
+                                              (month, index) => (
+                                                <div
+                                                  key={`contrib-month-${month?.value ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!month) {
+                                                      return;
+                                                    }
+                                                    setContributionEndMonth(month.value);
+                                                    snapMonthWheel(
+                                                      contributionMonthWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={
+                                                      month?.value === contributionEndMonth
+                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
+                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
+                                                    }
+                                                  >
+                                                    {month?.label ?? ""}
+                                                  </span>
+                                                </div>
+                                              ),
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                          {copy.labels.year}
+                                        </p>
+                                        <div className="relative">
+                                          <div
+                                            ref={contributionYearWheelRef}
+                                            className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                            style={{
+                                              height: wheelVisibleItems * wheelItemHeight,
+                                              scrollSnapType: "y mandatory",
+                                              paddingTop: wheelItemHeight,
+                                              paddingBottom: wheelItemHeight / 2,
+                                            }}
+                                          >
+                                            {contributionYearWheelItems.map(
+                                              (year, index) => (
+                                                <div
+                                                  key={`contrib-year-${year ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!year) {
+                                                      return;
+                                                    }
+                                                    setContributionEndYear(year);
+                                                    snapYearWheel(
+                                                      contributionYearWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={
+                                                      year === contributionEndYear
+                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
+                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
+                                                    }
+                                                  >
+                                                    {year ?? ""}
+                                                  </span>
+                                                </div>
+                                              ),
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setShowContributionEndPicker(false)
+                                        }
+                                        className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
+                                      >
+                                        {copy.buttons.done}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2639,43 +2876,37 @@ export default function UiPreviewPage() {
                         </div>
                         {workToAbleHasEarnedIncome && (
                           <>
-                            <div className="mt-3" />
-                            <div className="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--theme-fg)]">
-                              {copy.tooltips.earnedIncome.prompt}
-                              <span className="group relative inline-flex p-2 -m-2">
-                                <button
-                                  type="button"
-                                  aria-label={
-                                    copy.accessibility.estimatedEarnedIncomeInfo
-                                  }
-                                  className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)]/65 text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)]"
-                                >
-                                  i
-                                </button>
-                                <span className="pointer-events-none absolute right-0 top-full z-10 w-80 max-h-56 overflow-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 pb-2 pt-3 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] text-left opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
-                                  <p>{copy.tooltips.earnedIncome.lead}</p>
-                                  <p className="mt-2 font-semibold">
-                                    {copy.tooltips.earnedIncome.includedTitle}
-                                  </p>
-                                  <ul className="mt-1 list-disc space-y-1 pl-4 font-normal">
-                                    {copy.tooltips.earnedIncome.includedItems.map(
-                                      (item) => (
-                                        <li key={item}>{item}</li>
-                                      ),
-                                    )}
-                                  </ul>
-                                  <p className="mt-2 font-semibold">
-                                    {copy.tooltips.earnedIncome.excludedTitle}
-                                  </p>
-                                  <ul className="mt-1 list-disc space-y-1 pl-4 font-normal">
-                                    {copy.tooltips.earnedIncome.excludedItems.map(
-                                      (item) => (
-                                        <li key={item}>{item}</li>
-                                      ),
-                                    )}
-                                  </ul>
-                                </span>
-                              </span>
+                            <div className="mt-3 space-y-3 text-[color:var(--theme-muted)]">
+                              <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                                {copy.tooltips.earnedIncome.prompt}
+                              </p>
+                              <p className="text-xs leading-relaxed">
+                                {copy.tooltips.earnedIncome.lead}
+                              </p>
+                              <div className="space-y-1">
+                                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                  {copy.tooltips.earnedIncome.includedTitle}
+                                </p>
+                                <ul className="list-disc space-y-1 pl-4 text-xs">
+                                  {copy.tooltips.earnedIncome.includedItems.map(
+                                    (item) => (
+                                      <li key={`included-${item}`}>{item}</li>
+                                    ),
+                                  )}
+                                </ul>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                  {copy.tooltips.earnedIncome.excludedTitle}
+                                </p>
+                                <ul className="list-disc space-y-1 pl-4 text-xs">
+                                  {copy.tooltips.earnedIncome.excludedItems.map(
+                                    (item) => (
+                                      <li key={`excluded-${item}`}>{item}</li>
+                                    ),
+                                  )}
+                                </ul>
+                              </div>
                             </div>
                             <input
                               className="mt-2 h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
@@ -2837,25 +3068,11 @@ export default function UiPreviewPage() {
                     </div>
                   )}
                   <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
-                    <p>
-                      Please use the input fields on the left to plan for account
-                      activity and to check for Federal Savers Credit eligibility.
-                    </p>
-                    <p>
-                      The starting balance should either be an existing ABLE
-                      account balance or a qualified rollover from another plan.
-                      Upront contribution is what you currently have saved and plan
-                      to contribute at the time of account opening. You can also
-                      plan for monthly or annual recurring contributions. Up front
-                      and periodic contributions are assumed to occur and start in
-                      the current month. In addition, you can plan for monthly
-                      withdrawals. You have the ability to choose the month and
-                      year, in which those withdrawals shall start.
-                    </p>
-                    <p>
-                      You can also check to see if the beneficiary is eligible for
-                      Federal Savers Credit.
-                    </p>
+                    {copy.misc.disclosureCards.accountActivity.map(
+                      (paragraph, index) => (
+                        <p key={`accountActivity-${index}`}>{paragraph}</p>
+                      ),
+                    )}
                   </div>
                     </aside>
                   </div>

@@ -67,3 +67,10 @@ This project deploys to Netlify. Next.js API routes run as Netlify-managed funct
 
 - [Next.js deployment on Netlify](https://docs.netlify.com/integrations/frameworks/next-js/overview/)
 - [Netlify build configuration](https://docs.netlify.com/configure-builds/get-started/)
+
+## Pending Infrastructure Improvements
+
+- Add integration/smoke tests for `/api/calculate` (valid payload, validation failures, and internal errors) so the new schema enforcement is covered end to end.
+- Add smoke tests for `/api/disclosures/[clientId]` to verify missing/unknown IDs return 400/404 respectively before falling back to defaults.
+- Consider replacing the custom validation helpers with a schema library (e.g., Zod) to keep input definitions centralized and help drive future docs.
+- Add real client overrides to `src/data/disclosures/index.ts` so the new `supportedClientIds` check can catch misconfigurations instead of rejecting every request, and surface logging/telemetry for invalid clients.

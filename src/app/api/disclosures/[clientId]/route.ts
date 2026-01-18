@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getDisclosures } from "../../../../data/disclosures";
+import {
+  getDisclosures,
+  supportedClientIds,
+} from "../../../../data/disclosures";
 import type { DisclosurePayload } from "../../../../types/disclosures";
 
 const defaultLocale: DisclosurePayload["locale"] = "en-US";
@@ -20,6 +23,12 @@ export async function GET(
     return NextResponse.json(
       { error: "Missing clientId." },
       { status: 400 },
+    );
+  }
+  if (!supportedClientIds.includes(clientId)) {
+    return NextResponse.json(
+      { error: "Unknown clientId." },
+      { status: 404 },
     );
   }
   const payload = getDisclosures(clientId, locale);

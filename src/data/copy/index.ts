@@ -132,6 +132,10 @@ export const uiPreviewCopy = {
           label: "Tax Benefits",
           note: "",
         },
+        annualReturns: {
+          label: "Annual Returns",
+          note: "Experimental layout for reviewing annualized returns.",
+        },
         viewToggle: {
           tables: "Tables",
           charts: "Charts",
@@ -143,8 +147,10 @@ export const uiPreviewCopy = {
             ableBase: "ABLE account base annual average return",
             stateDeduction: "State tax deduction/credit on contributions",
             federalSavers: "Federal Saver's Credit",
-            ableTotal: "Total ABLE account average annual return",
+            ableTotal: "ADJUSTED ABLE account average annual return",
             taxesOnEarnings: "Federal and state taxes on earnings",
+            federalTaxesOnEarnings: "Federal taxes on earnings",
+            stateTaxesOnEarnings: "State taxes on earnings",
             taxable: "Average annual return of a taxable account",
           },
         },
@@ -215,9 +221,13 @@ export const uiPreviewCopy = {
       adjustedGrossIncome: "Adjusted Gross Income",
       annualReturnAssumption: "Annual Investment Return",
       startingBalance: "Starting balance",
-      upfrontContribution: "Up-front",
-      recurringContribution: "Recurring",
+      upfrontContribution: "Up-front contributions",
+      recurringContribution: "Amount",
+      monthlyContributionsLabel: "Contributions",
+      federalTaxOnEarnings: "Federal taxes on earnings",
+      stateTaxOnEarnings: "State taxes on earnings",
       contributionCadence: "Cadence",
+      contributionEndDate: "End date",
       monthlyWithdrawalAmount: "Monthly withdrawal amount",
       monthlyStart: "Monthly start (month/year)",
       month: "Month",
@@ -294,6 +304,10 @@ export const uiPreviewCopy = {
       earnedIncomeQuestion: "Does the beneficiary have earned income?",
       employerPlanQuestion: "Is the beneficiary covered by a retirement plan?",
     },
+    ssi: {
+      autoWithdrawalsMessage: (limit: string, date: string) =>
+        `Automatic withdrawals are scheduled to begin in ${date} to keep the balance at ${limit}.`,
+    },
     warnings: {
       planMaxStop: (planMax: string, stopMonth: string) =>
         `In this planning tool, contributions stop in ${stopMonth} because the projected balance reaches the plan maximum of ${planMax}.`,
@@ -314,6 +328,24 @@ export const uiPreviewCopy = {
       removeWithdrawal: "Remove withdrawal amounts",
       disclosurePlaceholder:
         "Disclosure placeholder text. This content will be replaced with final disclosure language.",
+      disclosureCards: {
+        demographics: [
+          "Welcome to our interactive ABLE planning tool. Start by providing basic demographic information on the left input screen. You will be able to navigate to any of the input screens to edit all this information.",
+          "Your state of residence is used to determine plan eligibility as well as to calculate certain state tax benefits.",
+          "Similarly, your tax filing status and Adjusted Gross Income (AGI) will help us determine and project federal and, where applicable, state tax benefits of investing in an ABLE account. Remember that your AGI is not the same as your salary. It may be more than your earned income due to other sources of income. Conversely, for most taxpayers, it often is less than your earned income due to deductions or exemptions. You can find your AGI in your most recent tax return if you filed one. If you are not sure what your current AGI is, simply put your salary and wages.",
+          "We would like to know the time-period you want to plan for, so that we can project and present information for a meaningful time horizon.",
+          "Finally, we proposed some default investment return assumption. You will note that the investment return defaults are different for short term time horizon compared to a longer time horizon. Feel free to change those assumptions to try out different scenarios.",
+        ],
+        accountActivity: [
+          "Please use the input fields on the left to plan for account activity and to check for Federal Savers Credit eligibility.",
+          "The starting balance should either be an existing ABLE account balance or a qualified rollover from another plan.",
+          "Up-front contribution is what you currently have saved and plan to contribute at the time of account opening.",
+          "You can plan for monthly or annual recurring contributions. Up front and periodic contributions are assumed to occur and start in the current month. You can also select an end date for contributions.",
+          "In addition, you can plan for monthly withdrawals. You can choose the month and year in which those withdrawals will start.",
+          "On this screen, you can also check to see if the beneficiary is eligible for Federal Saver's Credit.",
+          "As you input your information, messages will appear in this window that will help you navigate certain contribution and account balance limits and make suggested changes to your contribution and withdrawal inputs.",
+        ],
+      },
       pdfFootnotes: [
         "Figures are estimates for planning purposes only.",
       ],
@@ -496,6 +528,10 @@ export const uiPreviewCopy = {
           label: "Beneficios fiscales",
           note: "",
         },
+        annualReturns: {
+          label: "Rendimientos anuales",
+          note: "Diseño experimental para revisar los rendimientos anualizados.",
+        },
         viewToggle: {
           tables: "Tablas",
           charts: "Gráficos",
@@ -509,6 +545,8 @@ export const uiPreviewCopy = {
             federalSavers: "Credito federal del ahorrador",
             ableTotal: "Rendimiento anual promedio total de la cuenta ABLE",
             taxesOnEarnings: "Impuestos federales y estatales sobre las ganancias",
+            federalTaxesOnEarnings: "Impuestos federales sobre las ganancias",
+            stateTaxesOnEarnings: "Impuestos estatales sobre las ganancias",
             taxable: "Rendimiento anual promedio de una cuenta imponible",
           },
         },
@@ -579,9 +617,13 @@ export const uiPreviewCopy = {
       adjustedGrossIncome: "Ingreso bruto ajustado",
       annualReturnAssumption: "Rendimiento anual de inversión",
       startingBalance: "Saldo inicial",
-      upfrontContribution: "Inicial",
-      recurringContribution: "Recurrente",
+      upfrontContribution: "Contribuciones iniciales",
+      recurringContribution: "Monto",
+      monthlyContributionsLabel: "Contribuciones",
+      federalTaxOnEarnings: "Impuestos federales sobre ganancias",
+      stateTaxOnEarnings: "Impuestos estatales sobre ganancias",
       contributionCadence: "Cadencia",
+      contributionEndDate: "Fecha de finalización",
       monthlyWithdrawalAmount: "Monto de retiro mensual",
       monthlyStart: "Inicio mensual (mes/año)",
       month: "Mes",
@@ -659,6 +701,10 @@ export const uiPreviewCopy = {
       employerPlanQuestion:
         "¿El beneficiario está cubierto por un plan de jubilación?",
     },
+    ssi: {
+      autoWithdrawalsMessage: (limit: string, date: string) =>
+        `Se han programado retiros automáticos para comenzar en ${date} y mantener el saldo en ${limit}.`,
+    },
     warnings: {
       planMaxStop: (planMax: string, stopMonth: string) =>
         `En esta herramienta de planificación, las contribuciones se detienen en ${stopMonth} porque el saldo proyectado alcanza el máximo del plan de ${planMax}.`,
@@ -679,6 +725,24 @@ export const uiPreviewCopy = {
       removeWithdrawal: "Eliminar montos de retiro",
       disclosurePlaceholder:
         "Texto de divulgación de marcador de posición. Este contenido será reemplazado por el texto final.",
+      disclosureCards: {
+        demographics: [
+          "Bienvenido a nuestra herramienta interactiva de planificación ABLE. Comience proporcionando información demográfica básica en la pantalla de entrada izquierda. Podrá navegar a cualquiera de las pantallas de entrada para editar toda esta información.",
+          "Su estado de residencia se utiliza para determinar la elegibilidad del plan, así como para calcular ciertos beneficios fiscales estatales.",
+          "De manera similar, su estado civil para declarar impuestos y su ingreso bruto ajustado (AGI) nos ayudarán a determinar y proyectar los beneficios fiscales federales y, cuando corresponda, estatales de invertir en una cuenta ABLE. Recuerde que su AGI no es lo mismo que su salario. Puede ser mayor que sus ingresos por trabajo debido a otras fuentes de ingresos. Por el contrario, para la mayoría de los contribuyentes, suele ser menor que los ingresos que ganó a causa de las deducciones o exenciones. Puede encontrar su AGI en su última declaración de impuestos si presentó una. Si no está seguro de cuál es su AGI actual, simplemente indique su salario y sueldos.",
+          "Queremos saber el período de tiempo para el que desea planificar, para que podamos proyectar y presentar información con un horizonte significativo.",
+          "Finalmente, proponemos algunos supuestos predeterminados de rendimiento de inversión. Notará que los valores predeterminados del rendimiento de inversión son diferentes para horizontes de tiempo a corto plazo en comparación con horizontes más largos. Siéntase libre de cambiar esos supuestos para probar diferentes escenarios.",
+        ],
+        accountActivity: [
+          "Use los campos de entrada de la izquierda para planificar la actividad de la cuenta y verificar la elegibilidad para el Crédito Federal del Ahorrador.",
+          "El saldo inicial debe ser un saldo existente de una cuenta ABLE o un traspaso calificado desde otro plan.",
+          "La contribución inicial es lo que ya ha ahorrado y planea aportar al momento de abrir la cuenta.",
+          "Puede planificar contribuciones recurrentes mensuales o anuales. Se asume que las contribuciones iniciales y periódicas se realizan y comienzan en el mes actual. También puede seleccionar una fecha de finalización para las contribuciones.",
+          "Además, puede planificar retiros mensuales. Puede elegir el mes y año en el que comenzarán esos retiros.",
+          "En esta pantalla, también puede verificar si el beneficiario es elegible para el Crédito Federal del Ahorrador.",
+          "A medida que ingrese su información, aparecerán mensajes en esta ventana que lo ayudarán a navegar ciertos límites de contribución y saldo de cuenta y a realizar cambios sugeridos en sus entradas de contribución y retiro.",
+        ],
+      },
       pdfFootnotes: [
         "Las cifras son estimaciones solo para fines de planificación.",
       ],

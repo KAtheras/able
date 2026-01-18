@@ -27,6 +27,8 @@ export type SimulationInput = {
   planMaxBalance?: number | null;
   ssiLimit?: number | null;
   enforceSsi?: boolean;
+  contributionEndMonth?: number | null;
+  contributionEndYear?: number | null;
 };
 
 export type AmortizationRow = {
@@ -72,21 +74,40 @@ export function runMonthlySimulation(input: SimulationInput): AmortizationRow[] 
   let balance = input.startingBalance;
   let upfrontContributionApplied = false;
   let contributionsStopped = false;
-  let planMaxStopApplied = false;
+  const contributionEndYear = input.contributionEndYear ?? null;
+  const contributionEndMonth = input.contributionEndMonth ?? null;
+  const hasContributionCutoff =
+    contributionEndYear != null && contributionEndMonth != null;
+  const contributionEndYearValue = contributionEndYear ?? 0;
+  const contributionEndMonthValue = contributionEndMonth ?? 0;
   const schedule: AmortizationRow[] = [];
 
   for (let monthIndex = 0; monthIndex < months; monthIndex += 1) {
-    if (planMaxBalance != null && balance >= planMaxBalance) {
-      contributionsStopped = true;
-      planMaxStopApplied = true;
-    }
-    if (enforceSsi && ssiLimit != null && balance >= ssiLimit) {
-      contributionsStopped = true;
-    }
     const totalMonthsFromStart = planStartMonth - 1 + monthIndex;
     const rowMonth = (totalMonthsFromStart % 12) + 1;
     const rowYear =
       planStartYear + Math.floor(totalMonthsFromStart / 12);
+    let planMaxStopThisRow = false;
+    if (hasContributionCutoff) {
+      const afterEndDate =
+        rowYear > contributionEndYearValue ||
+        (rowYear === contributionEndYearValue &&
+          rowMonth > contributionEndMonthValue);
+      if (afterEndDate) {
+        contributionsStopped = true;
+      }
+    }
+    if (planMaxBalance != null && balance >= planMaxBalance) {
+      contributionsStopped = true;
+      planMaxStopThisRow = true;
+    }
+    if (
+      enforceSsi &&
+      ssiLimit != null &&
+      balance >= ssiLimit
+    ) {
+      contributionsStopped = true;
+    }
     const recurringContributionThisMonth = recurringContributions.reduce(
       (sum, contribution) => {
         if (!isContributionDue(contribution.cadence, monthIndex)) {
@@ -143,7 +164,7 @@ export function runMonthlySimulation(input: SimulationInput): AmortizationRow[] 
     ) {
       contributionsThisMonth = 0;
       contributionsStopped = true;
-      planMaxStopApplied = true;
+      planMaxStopThisRow = true;
       balanceAfterContributions = balance;
       earnings =
         monthIndex === 0 || balanceAfterContributions <= 0
@@ -174,7 +195,7 @@ export function runMonthlySimulation(input: SimulationInput): AmortizationRow[] 
     balance -= withdrawalsApplied;
     if (planMaxBalance != null && balance >= planMaxBalance) {
       contributionsStopped = true;
-      planMaxStopApplied = true;
+      planMaxStopThisRow = true;
     }
     if (enforceSsi && ssiLimit != null && balance >= ssiLimit) {
       contributionsStopped = true;
@@ -191,7 +212,7 @@ export function runMonthlySimulation(input: SimulationInput): AmortizationRow[] 
       annualWithdrawals: appliedAnnualWithdrawals,
       endingBalance: balance,
       monthlyRate,
-      planMaxStop: planMaxStopApplied,
+      planMaxStop: planMaxStopThisRow,
     });
   }
 

@@ -1,5 +1,8 @@
 import federalSaversContributionLimits from "../../data/federalSaversContributionLimits.json";
-import { runMonthlySimulation } from "../../core/simulation";
+import {
+  runMonthlySimulation,
+  type AmortizationRow,
+} from "../../core/simulation";
 import { getFederalSaversCreditForStatus } from "../../lib/federalSavers";
 import { getFederalRate } from "../../lib/federalTax";
 import { Cadence, FilingStatus } from "../../lib/localization";
@@ -31,6 +34,23 @@ const isContributionDue = (cadence: Cadence, monthIndex: number) => {
   return false;
 };
 
+const isRowAfterContributionEndDate = (
+  row: AmortizationRow,
+  endMonth?: number | null,
+  endYear?: number | null,
+) => {
+  if (endMonth == null || endYear == null) {
+    return false;
+  }
+  if (row.year > endYear) {
+    return true;
+  }
+  if (row.year === endYear && row.month > endMonth) {
+    return true;
+  }
+  return false;
+};
+
 export function calculateProjection(
   input: CalculationInput,
 ): CalculationResult {
@@ -51,6 +71,8 @@ export function calculateProjection(
     input.currentYear,
     Number.parseInt(input.monthlyWithdrawalStartYear, 10) || input.currentYear,
   );
+  const contributionEndMonth = input.contributionEndMonth ?? null;
+  const contributionEndYear = input.contributionEndYear ?? null;
 
   const recurringContributions =
     beneficiaryRecurring > 0
@@ -82,6 +104,8 @@ export function calculateProjection(
     planStartMonth: 1,
     planStartYear: input.currentYear,
     planMaxBalance: input.planMaxBalance,
+    contributionEndMonth,
+    contributionEndYear,
   });
 
   const schedule = input.isSsiBeneficiary
@@ -107,13 +131,17 @@ export function calculateProjection(
         planMaxBalance: input.planMaxBalance,
         ssiLimit: ssiBalanceLimit,
         enforceSsi: true,
-      })
+        contributionEndMonth,
+        contributionEndYear,
+    })
     : baseSchedule;
 
   const ssiExceedRow =
     baseSchedule.find((row) => row.endingBalance > ssiBalanceLimit) ?? null;
-  const planMaxStopRow =
-    schedule.find((entry) => entry.planMaxStop) ?? null;
+  const ssiExceededAfterContributionEndDate =
+    !!ssiExceedRow &&
+    isRowAfterContributionEndDate(ssiExceedRow, contributionEndMonth, contributionEndYear);
+  const planMaxStopRow = schedule.find((entry) => entry.planMaxStop) ?? null;
 
   const contributionAllocations = schedule.map((row) => {
     const plannedBeneficiary =
@@ -284,5 +312,6 @@ export function calculateProjection(
     fscCreditRate,
     fscEligibleForCredit,
     fscContributionLimit,
+    ssiExceededAfterContributionEndDate,
   };
 }
