@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "generate:data": "node scripts/generate-data.mjs",
-    "build": "next build",
+    "build": "NEXT_DISABLE_TURBOPACK=1 next build",
     "start": "next start",
     "lint": "eslint"
   },

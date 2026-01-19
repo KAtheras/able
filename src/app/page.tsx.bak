@@ -316,7 +316,7 @@ export default function UiPreviewPage() {
     (workToAbleHasEarnedIncome === true &&
       workToAbleHasEmployerPlan !== null);
   const workToAbleTestFinalized =
-    workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleEligibilityAnswered;
+    workToAbleDecision === "yes" && workToAbleEligibilityAnswered;
   const workToAbleAdditionalContribution =
     workToAbleEligible && workToAbleFplEntry
       ? Math.min(workToAbleIncomeAmount, workToAbleFplEntry.amount)
@@ -361,13 +361,13 @@ export default function UiPreviewPage() {
     workToAbleDecision === "undecided" &&
     !workToAbleTestLocked;
   const workToAbleTestCompleted =
-    showWorkToAblePrompt
-      ? false
-      : workToAbleDecision !== "undecided" || workToAbleEligibilityAnswered;
+    !showWorkToAblePrompt ||
+    workToAbleDecision === "no" ||
+    (workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
   const contributionLimitResolved =
     !exceedsCombinedLimit ||
-    workToAbleDecision !== "undecided" && workToAbleDecision === "no" ||
-    (workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
+    workToAbleDecision === "no" ||
+    (workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
 
   useEffect(() => {
     if (!exceedsCombinedLimit && !workToAbleTestLocked) {
@@ -382,11 +382,11 @@ export default function UiPreviewPage() {
   }, [workToAbleHasEarnedIncome, workToAbleIncomeAmount]);
 
   useEffect(() => {
-    if (workToAbleDecision !== "undecided" && workToAbleDecision === "no") {
+    if (workToAbleDecision === "no") {
       setWorkToAbleTestLocked(true);
       return;
     }
-    if (workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleEligibilityAnswered) {
+    if (workToAbleDecision === "yes" && workToAbleEligibilityAnswered) {
       setWorkToAbleTestLocked(true);
     }
   }, [workToAbleDecision, workToAbleEligibilityAnswered]);
@@ -424,8 +424,11 @@ export default function UiPreviewPage() {
     return fixed.replace(/\.00$/, "");
   };
 
-  const pdfFootnotes = useMemo(() => [...copy.misc.pdfFootnotes], [copy.misc.pdfFootnotes]);
-  const pdfDisclosures = useMemo(() => [...copy.misc.pdfDisclosures], [copy.misc.pdfDisclosures]);
+  const pdfFootnotes = useMemo(() => copy.misc.pdfFootnotes, [copy.misc.pdfFootnotes]);
+  const pdfDisclosures = useMemo(
+    () => copy.misc.pdfDisclosures,
+    [copy.misc.pdfDisclosures],
+  );
 
 
   const monthlyWithdrawalMonths = copy.monthNamesLong.map((label, index) => ({
@@ -1334,7 +1337,7 @@ export default function UiPreviewPage() {
       .map((key) => byKey.get(key))
       .filter(
         (item): item is (typeof taxBenefitsItems)[number] =>
-          item != null && item.value > 0,
+          Boolean(item) && item.value > 0,
       );
   }, [taxBenefitsItems]);
   const taxBenefitsLegendItems = useMemo(
@@ -2733,7 +2736,7 @@ export default function UiPreviewPage() {
                           type="button"
                           onClick={() => setWorkToAbleDecision("yes")}
                           className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                            workToAbleDecision !== "undecided" && workToAbleDecision === "yes"
+                            workToAbleDecision === "yes"
                               ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
                               : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
                           }`}
@@ -2744,7 +2747,7 @@ export default function UiPreviewPage() {
                           type="button"
                           onClick={() => setWorkToAbleDecision("no")}
                           className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                            workToAbleDecision !== "undecided" && workToAbleDecision === "no"
+                            workToAbleDecision === "no"
                               ? "bg-[color:var(--theme-danger)] text-[color:var(--theme-accent-text)]"
                               : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
                           }`}
@@ -2754,7 +2757,7 @@ export default function UiPreviewPage() {
                       </div>
                     </div>
                   )}
-                  {workToAbleDecision !== "undecided" && workToAbleDecision === "no" && exceedsLimit ? (
+                  {workToAbleDecision === "no" && exceedsLimit ? (
                     <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
                       <p>
                         {copy.workToAble.declineMessage(
@@ -2794,7 +2797,7 @@ export default function UiPreviewPage() {
                     </div>
                   ) : null}
 
-                  {workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleTestFinalized ? (
+                  {workToAbleDecision === "yes" && workToAbleTestFinalized ? (
                     <>
                       {workToAbleNotEligible && exceedsLimit ? (
                         <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
@@ -2885,7 +2888,7 @@ export default function UiPreviewPage() {
                         </div>
                       ) : null}
                     </>
-                  ) : workToAbleDecision !== "undecided" && workToAbleDecision === "yes" ? (
+                  ) : workToAbleDecision === "yes" ? (
                     <div className="space-y-4 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
                       <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
                         {copy.workToAble.title}

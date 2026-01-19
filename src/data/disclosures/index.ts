@@ -65,22 +65,24 @@ const disclosures: DisclosureLibrary = {
   IL: {
     "en-US": {
       disclosures: {
-        accountActivity: [
-          ...defaultDisclosures["en-US"].disclosures.accountActivity,
-        ],
+        report: [...defaultDisclosures["en-US"].disclosures.report],
+        demographics: [...defaultDisclosures["en-US"].disclosures.demographics],
+        accountActivity: [...defaultDisclosures["en-US"].disclosures.accountActivity],
       },
     },
     "es-US": {
       disclosures: {
-        accountActivity: [
-          ...defaultDisclosures["es-US"].disclosures.accountActivity,
-        ],
+        report: [...defaultDisclosures["es-US"].disclosures.report],
+        demographics: [...defaultDisclosures["es-US"].disclosures.demographics],
+        accountActivity: [...defaultDisclosures["es-US"].disclosures.accountActivity],
       },
     },
   },
   TX: {
     "en-US": {
       disclosures: {
+        report: [...defaultDisclosures["en-US"].disclosures.report],
+        demographics: [...defaultDisclosures["en-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["en-US"].disclosures.accountActivity,
           "If you are planning using the Texas ABLE plan, the inputs already respect Texas limits and expected tax benefits.",
@@ -89,6 +91,8 @@ const disclosures: DisclosureLibrary = {
     },
     "es-US": {
       disclosures: {
+        report: [...defaultDisclosures["es-US"].disclosures.report],
+        demographics: [...defaultDisclosures["es-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["es-US"].disclosures.accountActivity,
           "Si planifica usar el plan ABLE de Texas, los datos ya respetan los límites de contribución y beneficios fiscales esperados de Texas.",
@@ -99,6 +103,8 @@ const disclosures: DisclosureLibrary = {
   CA: {
     "en-US": {
       disclosures: {
+        report: [...defaultDisclosures["en-US"].disclosures.report],
+        demographics: [...defaultDisclosures["en-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["en-US"].disclosures.accountActivity,
           "The California ABLE plan includes parity adjustments, and this preview follows California-specific eligibility guidance.",
@@ -107,6 +113,8 @@ const disclosures: DisclosureLibrary = {
     },
     "es-US": {
       disclosures: {
+        report: [...defaultDisclosures["es-US"].disclosures.report],
+        demographics: [...defaultDisclosures["es-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["es-US"].disclosures.accountActivity,
           "El plan ABLE de California incluye ajustes de paridad, y este adelanto sigue la orientación de elegibilidad específica de California.",
@@ -117,6 +125,8 @@ const disclosures: DisclosureLibrary = {
   UT: {
     "en-US": {
       disclosures: {
+        report: [...defaultDisclosures["en-US"].disclosures.report],
+        demographics: [...defaultDisclosures["en-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["en-US"].disclosures.accountActivity,
           "Utah’s ABLE plan offers its own benefits and contribution limits, and this calculator respects those local details.",
@@ -125,6 +135,8 @@ const disclosures: DisclosureLibrary = {
     },
     "es-US": {
       disclosures: {
+        report: [...defaultDisclosures["es-US"].disclosures.report],
+        demographics: [...defaultDisclosures["es-US"].disclosures.demographics],
         accountActivity: [
           ...defaultDisclosures["es-US"].disclosures.accountActivity,
           "El plan ABLE de Utah ofrece beneficios y límites propios, y esta calculadora respeta esos detalles locales.",

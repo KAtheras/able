@@ -294,7 +294,7 @@ export function ReportPdf({
               key={`${row.period}-${index}`}
               style={[
                 styles.tableRow,
-                index === amortizationRows.length - 1 && { borderBottomWidth: 0 },
+                index === amortizationRows.length - 1 ? { borderBottomWidth: 0 } : {},
               ]}
             >
               <Text style={styles.cell}>{row.period}</Text>

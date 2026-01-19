@@ -31,7 +31,7 @@ type StateBenefitEntry = {
   benefits?: Partial<Record<FilingStatus, StateBenefit>>;
 };
 
-const stateBenefitMap: Record<string, StateBenefitEntry> = stateBenefitData;
+const stateBenefitMap = stateBenefitData as unknown as Record<string, StateBenefitEntry>;
 const statePlanMap: Record<string, StatePlanInfo> = planLevelInfo;
 
 const emptyBenefit: StateBenefit = {

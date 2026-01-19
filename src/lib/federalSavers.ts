@@ -20,7 +20,7 @@ export type FederalSaversResult = {
   bracketLabel?: string;
 };
 
-const data: FederalSaversRow[] = creditData;
+const data = creditData as unknown as FederalSaversRow[];
 
 function matchesBracket(agi: number, bracket?: FederalSaversBracket): boolean {
   if (!bracket) {

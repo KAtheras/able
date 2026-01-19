@@ -12,6 +12,8 @@
   --theme-warning-text: #b45309;
   --theme-danger: #fb7185;
   --theme-danger-text: #be123c;
+  --font-geist-sans: "Inter", "system-ui", sans-serif;
+  --font-geist-mono: "IBM Plex Mono", "ui-monospace", monospace;
   --theme-font-family: var(--font-geist-sans);
   --theme-font-size: 16px;
   --background: var(--theme-bg);
