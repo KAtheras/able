@@ -9,7 +9,7 @@
   --theme-accent-text: #0f172a;
   --theme-info: #3b82f6;
   --theme-info-text: #1e3a8a;
-  --theme-border: #1f2937;
+  --theme-border: #334155;
   --theme-warning: #f59e0b;
   --theme-warning-text: #b45309;
   --theme-danger: #fb7185;
@@ -42,6 +42,28 @@ body {
   color: var(--foreground);
   font-family: var(--theme-font-family);
   font-size: var(--theme-font-size);
+}
+
+input,
+select,
+textarea {
+  border: 1px solid rgba(156, 163, 175, 0.5);
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  color: #0f172a;
+  transition: border-color 0.2s ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+[class*="border-[color:var(--theme-border)]"] {
+  border-width: 2px !important;
 }
 
 .select-pill {

@@ -45,6 +45,9 @@ export function getThemeForClient(clientId?: string): ThemeConfig {
 }
 
 export function themeToCssVars(theme: ThemeConfig): Record<string, string> {
+  const accentColor = theme.colors.accent;
+  const surfaceColor = theme.colors.surface;
+  const borderColor = `color-mix(in srgb, ${accentColor} 68%, ${surfaceColor} 32%)`;
   return {
     "--theme-bg": theme.colors.background,
     "--theme-fg": theme.colors.foreground,
@@ -52,7 +55,7 @@ export function themeToCssVars(theme: ThemeConfig): Record<string, string> {
     "--theme-muted": theme.colors.muted,
     "--theme-accent": theme.colors.accent,
     "--theme-accent-text": theme.colors.accentText,
-    "--theme-border": theme.colors.border,
+    "--theme-border": borderColor,
     "--theme-warning": theme.colors.warning,
     "--theme-warning-text": theme.colors.warningText,
     "--theme-danger": theme.colors.danger,
@@ -62,8 +65,8 @@ export function themeToCssVars(theme: ThemeConfig): Record<string, string> {
     "--theme-surface-1": `color-mix(in srgb, ${theme.colors.surface} 85%, transparent)`,
     "--theme-surface-2": `color-mix(in srgb, ${theme.colors.surface} 75%, transparent)`,
     "--theme-surface-3": `color-mix(in srgb, ${theme.colors.surface} 65%, transparent)`,
-    "--theme-border-weak": `color-mix(in srgb, ${theme.colors.border} 40%, transparent)`,
-    "--theme-border-strong": `color-mix(in srgb, ${theme.colors.border} 70%, transparent)`,
+    "--theme-border-weak": `color-mix(in srgb, ${borderColor} 40%, transparent)`,
+    "--theme-border-strong": `color-mix(in srgb, ${borderColor} 70%, transparent)`,
     "--theme-warning-weak": `color-mix(in srgb, ${theme.colors.warning} 20%, transparent)`,
     "--theme-danger-weak": `color-mix(in srgb, ${theme.colors.danger} 20%, transparent)`,
   };

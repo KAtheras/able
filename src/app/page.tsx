@@ -86,6 +86,13 @@ function describeArc(
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 }
 
+function escapeCsvValue(value: string) {
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 const advancedBudgetFields = [
   { key: "housing", label: "Housing" },
   { key: "healthcare", label: "Healthcare" },
@@ -1869,6 +1876,51 @@ export default function UiPreviewPage() {
     }
   };
 
+  const handleDownloadAmortizationCsv = useCallback(() => {
+    if (filteredScheduleRows.length === 0) {
+      return;
+    }
+    const headers = [
+      copy.table.month,
+      copy.table.contributions,
+      copy.table.monthlyWithdrawals,
+      copy.table.earnings,
+      copy.table.balance,
+      copy.table.federalTax,
+      copy.table.stateTax,
+      copy.table.federalSaversCredit,
+      copy.table.stateTaxDeductionCredit,
+    ];
+    const rows = filteredScheduleRows.map((row) => [
+      `${monthNames[row.month - 1]} ${row.year}`,
+      currencyFormatterWhole.format(row.contributions),
+      currencyFormatterWhole.format(row.monthlyWithdrawals),
+      currencyFormatter.format(row.earnings),
+      currencyFormatter.format(row.endingBalance),
+      currencyFormatter.format(row.rowFederalTax),
+      currencyFormatter.format(row.rowStateTax),
+      currencyFormatter.format(row.rowFederalSaversCredit),
+      currencyFormatter.format(row.rowDeductionTaxEffect),
+    ]);
+    const csvLines = [
+      headers.map(escapeCsvValue).join(","),
+      ...rows.map((values) => values.map(escapeCsvValue).join(",")),
+    ];
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `able-amortization-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [
+    filteredScheduleRows,
+    monthNames,
+    currencyFormatterWhole,
+    currencyFormatter,
+    copy.table,
+  ]);
+
   const toggleYearExpanded = (year: number) => {
     setExpandedYears((prev) => {
       const next = new Set(prev);
@@ -2630,6 +2682,16 @@ export default function UiPreviewPage() {
               </h2>
               <span />
             </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleDownloadAmortizationCsv}
+                disabled={filteredScheduleRows.length === 0}
+                className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition disabled:opacity-40 disabled:hover:opacity-40 hover:opacity-90"
+              >
+                {copy.misc.downloadScheduleButton}
+              </button>
+            </div>
             {calcError ? (
               <p className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] px-4 py-2 text-xs text-[color:var(--theme-warning-text)]">
                 {calcError}
@@ -2758,7 +2820,7 @@ export default function UiPreviewPage() {
             </div>
           </section>
         ) : (
-          <section className="flex flex-1 min-h-0 flex-col space-y-6 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-lg backdrop-blur max-[1024px]:pb-28">
+          <section className="flex flex-1 min-h-0 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 pb-0 shadow-lg backdrop-blur max-[1024px]:pb-28">
             <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
               <div className="flex w-full items-center justify-between gap-3 lg:w-auto lg:justify-start">
                 <button
@@ -2840,133 +2902,149 @@ export default function UiPreviewPage() {
                 {actionControls}
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto h-full gap-4">
               {step === 0 && (
-                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_0.8fr]">
-                  <div className="flex min-h-0 flex-col gap-4">
-                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                      <div className="grid gap-3 md:grid-cols-2 md:items-center">
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.beneficiary}
-                          </p>
-                          <input
-                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            value={beneficiaryName}
-                            onChange={(event) => setBeneficiaryName(event.target.value)}
-                          />
+                <div className="flex min-h-0 flex-1 flex-col gap-6 h-full">
+                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr] h-full items-stretch">
+                    <div className="flex min-h-0 flex-1 flex-col h-full">
+                      <div className="flex h-full flex-col gap-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-5 shadow-lg">
+                        <div className="flex flex-1 flex-col gap-4">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="grid gap-3 md:grid-cols-2 md:items-center">
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.beneficiary}
+                                  </p>
+                                  <input
+                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={beneficiaryName}
+                                    onChange={(event) =>
+                                      setBeneficiaryName(event.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.stateOfResidence}
+                                  </p>
+                                  <select
+                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={stateCode}
+                                    onChange={(event) =>
+                                      setStateCode(event.target.value)
+                                    }
+                                  >
+                                    {availableStateCodes.map((code) => (
+                                      <option key={code} value={code}>
+                                        {code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="grid gap-3 grid-cols-2">
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.taxFilingStatus}
+                                  </p>
+                                  <select
+                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={filingStatus}
+                                    onChange={(event) =>
+                                      setFilingStatus(event.target.value)
+                                    }
+                                  >
+                                    {filingStatusOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.adjustedGrossIncome}
+                                  </p>
+                                  <input
+                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={accountAGI}
+                                    onChange={(event) =>
+                                      setAccountAGI(event.target.value)
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                  {copy.labels.annualReturnAssumption}
+                                </p>
+                                <input
+                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                  value={annualReturnOverride}
+                                  onChange={(event) =>
+                                    setAnnualReturnOverride(event.target.value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <label className="flex items-center gap-3 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                <input
+                                  id="beneficiary-ssi-benefits"
+                                  type="checkbox"
+                                  checked={isSsiBeneficiary}
+                                  onChange={(event) =>
+                                    setIsSsiBeneficiary(event.target.checked)
+                                  }
+                                  className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100"
+                                />
+                                <span>{copy.labels.ssiBenefitsQuestion}</span>
+                              </label>
+                            </div>
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.stateOfResidence}
-                          </p>
-                          <select
-                            className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            value={stateCode}
-                            onChange={(event) => setStateCode(event.target.value)}
+                      </div>
+                    </div>
+                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)]">
+                      {residencyWarningMessage && (
+                        <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                          <span>{residencyWarningMessage}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (planStateCode) {
+                                setStateCode(planStateCode);
+                              }
+                              setResidencyOverride(true);
+                            }}
+                            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
                           >
-                            {availableStateCodes.map((code) => (
-                              <option key={code} value={code}>
-                                {code}
-                              </option>
-                            ))}
-                          </select>
+                            {copy.residency.actionLabel}
+                          </button>
                         </div>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                      <div className="grid gap-3 grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.taxFilingStatus}
-                          </p>
-                          <select
-                            className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            value={filingStatus}
-                            onChange={(event) => setFilingStatus(event.target.value)}
-                          >
-                            {filingStatusOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.adjustedGrossIncome}
-                          </p>
-                          <input
-                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            value={accountAGI}
-                            onChange={(event) => setAccountAGI(event.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                      <div className="space-y-2">
-                        <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                          {copy.labels.annualReturnAssumption}
-                        </p>
-                        <input
-                          className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                          value={annualReturnOverride}
-                          onChange={(event) =>
-                            setAnnualReturnOverride(event.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                      <label className="flex items-center gap-3 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                        <input
-                          id="beneficiary-ssi-benefits"
-                          type="checkbox"
-                          checked={isSsiBeneficiary}
-                          onChange={(event) =>
-                            setIsSsiBeneficiary(event.target.checked)
-                          }
-                          className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100"
-                        />
-                        <span>{copy.labels.ssiBenefitsQuestion}</span>
-                      </label>
-                    </div>
-                  </div>
-                  <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5">
-                    {residencyWarningMessage && (
-                      <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                        <span>{residencyWarningMessage}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (planStateCode) {
-                              setStateCode(planStateCode);
-                            }
-                            setResidencyOverride(true);
-                          }}
-                          className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
-                        >
-                          {copy.residency.actionLabel}
-                        </button>
-                      </div>
-                    )}
-                    <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
-                      {copy.misc.disclosureCards.demographics.map(
-                        (paragraph, index) => (
-                          <p key={`demographics-${index}`}>{paragraph}</p>
-                        ),
                       )}
-                    </div>
-                  </aside>
+                      <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                        {copy.misc.disclosureCards.demographics.map(
+                          (paragraph, index) => (
+                            <p key={`demographics-${index}`}>{paragraph}</p>
+                          ),
+                        )}
+                      </div>
+                    </aside>
+                  </div>
                 </div>
               )}
 
               {step === 1 && (
-                <div className="flex min-h-0 flex-1 flex-col gap-6">
-                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1.25fr_0.73fr]">
-                    <div className="flex min-h-0 flex-col">
-                      <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                <div className="flex min-h-0 flex-1 flex-col gap-4 h-full">
+                  <div className="grid min-h-0 gap-4 items-stretch lg:grid-cols-[1.25fr_0.73fr] h-full">
+                    <div className="flex min-h-0 flex-1 flex-col h-full">
+                      <div className="flex h-full flex-col rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
                         <div className="space-y-4">
                         <div className="grid gap-4 md:grid-cols-3">
                           <div className="space-y-2">
@@ -3412,7 +3490,7 @@ export default function UiPreviewPage() {
                         </div>
                       </div>
                     </div>
-                    <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 overflow-y-auto max-h-[calc(100vh-16rem)] min-h-0">
+                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)] min-h-0">
                       {messageOrder.map((key) => {
                         const component = messageComponentMap[key];
                         if (!component) {

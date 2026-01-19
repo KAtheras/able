@@ -361,6 +361,7 @@ export const uiPreviewCopy = {
       horizonYearSuffix: "Y",
       contributionsWithdrawals: "Contributions / Withdrawals",
       amortizationSchedule: "Amortization schedule",
+      downloadScheduleButton: "Download amortization schedule (Excel)",
     },
     accessibility: {
       printReport: "Print report",
@@ -758,6 +759,7 @@ export const uiPreviewCopy = {
       horizonYearSuffix: "A",
       contributionsWithdrawals: "Contribuciones / Retiros",
       amortizationSchedule: "Calendario de amortización",
+      downloadScheduleButton: "Descargar calendario de amortización (Excel)",
     },
     accessibility: {
       printReport: "Imprimir informe",
