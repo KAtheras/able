@@ -10,9 +10,11 @@ const defaultLocale: DisclosurePayload["locale"] = "en-US";
 
 export async function GET(
   request: Request,
-  { params }: { params: { clientId: string } },
+  { params }: { params: Promise<{ clientId: string }> },
 ) {
-  const clientId = params.clientId?.toUpperCase() ?? "";
+  const { clientId: rawClientId } = await params;
+
+  const clientId = rawClientId?.toUpperCase() ?? "";
   const url = new URL(request.url);
   const localeParam = url.searchParams.get("locale");
   const locale =
