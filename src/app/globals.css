@@ -7,6 +7,8 @@
   --theme-muted: #94a3b8;
   --theme-accent: #34d399;
   --theme-accent-text: #0f172a;
+  --theme-info: #3b82f6;
+  --theme-info-text: #1e3a8a;
   --theme-border: #1f2937;
   --theme-warning: #f59e0b;
   --theme-warning-text: #b45309;
@@ -25,6 +27,7 @@
   --theme-border-strong: color-mix(in srgb, var(--theme-border) 70%, transparent);
   --theme-warning-weak: color-mix(in srgb, var(--theme-warning) 20%, transparent);
   --theme-danger-weak: color-mix(in srgb, var(--theme-danger) 20%, transparent);
+  --theme-info-weak: color-mix(in srgb, var(--theme-info) 20%, transparent);
 }
 
 @theme inline {

@@ -2,7 +2,7 @@
 
 import { pdf } from "@react-pdf/renderer";
 import ReactECharts from "echarts-for-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ReportPdf, type ReportPdfProps } from "../pdf";
 import annualContributionLimits from "../data/annualContributionLimits.json";
@@ -191,6 +191,13 @@ export default function UiPreviewPage() {
   );
   const [annualReturnOverride, setAnnualReturnOverride] = useState("6.00");
   const [timeHorizonYears, setTimeHorizonYears] = useState("2");
+  const [messageOrder, setMessageOrder] = useState<string[]>([]);
+  const pushMessageToTop = useCallback((key: string) => {
+    setMessageOrder((prev) => [key, ...prev.filter((item) => item !== key)]);
+  }, []);
+  const removeMessageFromOrder = useCallback((key: string) => {
+    setMessageOrder((prev) => prev.filter((item) => item !== key));
+  }, []);
 
   const [startingBalance, setStartingBalance] = useState("0");
   const [beneficiaryUpfrontContribution, setBeneficiaryUpfrontContribution] =
@@ -255,10 +262,18 @@ export default function UiPreviewPage() {
   const [rightCardView, setRightCardView] = useState<"charts" | "tables">(
     "charts",
   );
+  const [reportViewMode, setReportViewMode] = useState<"default" | "table">(
+    "default",
+  );
 
   const copy = uiPreviewCopy[language];
+  const timeHorizonLabel = copy.labels.timeHorizonYears.replace(
+    /years/gi,
+    "YRS",
+  );
   const steps = copy.steps;
   const monthNames = copy.monthNamesShort;
+  const monthNamesLong = copy.monthNamesLong;
   const filingStatusOptions = filingStatusValues.map((value) => ({
     value,
     label: copy.filingStatusLabels[value],
@@ -392,11 +407,24 @@ export default function UiPreviewPage() {
     workToAbleDecision !== "undecided" && workToAbleDecision === "no" ||
     (workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleEligibilityAnswered);
 
+  const prevCombinedLimitRef = useRef(combinedLimit);
   useEffect(() => {
-    if (!exceedsCombinedLimit && !workToAbleTestLocked) {
+    if (
+      combinedLimit < prevCombinedLimitRef.current &&
+      workToAbleDecision !== "yes"
+    ) {
+      setWorkToAbleTestLocked(false);
       setWorkToAbleDecision("undecided");
     }
-  }, [exceedsCombinedLimit, workToAbleTestLocked]);
+    prevCombinedLimitRef.current = combinedLimit;
+  }, [combinedLimit, workToAbleDecision]);
+
+  useEffect(() => {
+    if (!exceedsCombinedLimit && workToAbleDecision !== "yes") {
+      setWorkToAbleTestLocked(false);
+      setWorkToAbleDecision("undecided");
+    }
+  }, [exceedsCombinedLimit, workToAbleDecision]);
 
   useEffect(() => {
     if (!workToAbleHasEarnedIncome || workToAbleIncomeAmount <= 0) {
@@ -432,6 +460,8 @@ export default function UiPreviewPage() {
       }),
     [copy.locale],
   );
+  const formatCurrencyForComparison = (value: number): string =>
+    currencyFormatterWhole.format(value);
   const percentFormatter = useMemo(
     () =>
       new Intl.NumberFormat(copy.locale, {
@@ -751,6 +781,24 @@ export default function UiPreviewPage() {
       planMaxStopLabel &&
       workToAbleTestCompleted,
   );
+  const workToAbleDeclineActive =
+    workToAbleDecision !== "undecided" &&
+    workToAbleDecision === "no" &&
+    exceedsLimit;
+  const workToAbleNotEligibleActive =
+    workToAbleDecision !== "undecided" &&
+    workToAbleDecision === "yes" &&
+    workToAbleNotEligible &&
+    exceedsLimit;
+  const workToAbleOverLimitActive =
+    workToAbleDecision !== "undecided" &&
+    workToAbleDecision === "yes" &&
+    workToAbleTestFinalized &&
+    workToAbleOverLimit;
+  const workToAbleInfoActive =
+    workToAbleDecision !== "undecided" &&
+    workToAbleDecision === "yes" &&
+    !workToAbleTestFinalized;
   const applyMaxAllowedContribution = (limit: number) => {
     if (limit <= 0) {
       setBeneficiaryUpfrontContribution("0");
@@ -844,6 +892,166 @@ export default function UiPreviewPage() {
     return taxAwareSchedule.slice(0, horizonMonths);
   }, [taxAwareSchedule, selectedHorizon]);
 
+  const zeroBalanceEvent = useMemo(() => {
+    const zeroIndex = filteredScheduleRows.findIndex(
+      (row) => row.endingBalance <= 0,
+    );
+    if (zeroIndex === -1) {
+      return null;
+    }
+    const row = filteredScheduleRows[zeroIndex];
+    const monthsRemaining = Math.max(
+      0,
+      filteredScheduleRows.length - (zeroIndex + 1),
+    );
+    const yearsBeforeEnd = Number((monthsRemaining / 12).toFixed(1));
+    return {
+      row,
+      label: `${monthNamesLong[row.month - 1]} ${row.year}`,
+      yearsBeforeEnd,
+    };
+  }, [filteredScheduleRows, monthNamesLong]);
+  const zeroBalanceYearsLabel = zeroBalanceEvent
+    ? Number.isInteger(zeroBalanceEvent.yearsBeforeEnd)
+      ? `${zeroBalanceEvent.yearsBeforeEnd}`
+      : `${zeroBalanceEvent.yearsBeforeEnd.toFixed(1)}`
+    : null;
+
+  const zeroBalanceActive = Boolean(zeroBalanceEvent && !disableNext);
+  const projectedBalanceActive = !zeroBalanceEvent;
+
+  useEffect(() => {
+    if (showSsiPrompt) {
+      pushMessageToTop("ssi-warning");
+    } else {
+      removeMessageFromOrder("ssi-warning");
+    }
+  }, [
+    showSsiPrompt,
+    ssiBalanceLimit,
+    ssiExceedLabel,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (showWorkToAblePrompt) {
+      pushMessageToTop("work-to-able-prompt");
+    } else {
+      removeMessageFromOrder("work-to-able-prompt");
+    }
+  }, [
+    showWorkToAblePrompt,
+    exceedsLimit,
+    exceedsCombinedLimit,
+    workToAbleDecision,
+    workToAbleTestLocked,
+    annualLimit,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (workToAbleDeclineActive) {
+      pushMessageToTop("work-to-able-decline");
+    } else {
+      removeMessageFromOrder("work-to-able-decline");
+    }
+  }, [
+    workToAbleDeclineActive,
+    amountOverAnnualLimit,
+    annualOveragePeriod,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (workToAbleNotEligibleActive) {
+      pushMessageToTop("work-to-able-not-eligible");
+    } else {
+      removeMessageFromOrder("work-to-able-not-eligible");
+    }
+  }, [
+    workToAbleNotEligibleActive,
+    amountOverAnnualLimit,
+    annualOveragePeriod,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (workToAbleOverLimitActive) {
+      pushMessageToTop("work-to-able-over-limit");
+    } else {
+      removeMessageFromOrder("work-to-able-over-limit");
+    }
+  }, [
+    workToAbleOverLimitActive,
+    combinedLimit,
+    amountOverCombinedLimit,
+    combinedOveragePeriod,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (workToAbleInfoActive) {
+      pushMessageToTop("work-to-able-info");
+    } else {
+      removeMessageFromOrder("work-to-able-info");
+    }
+  }, [
+    workToAbleInfoActive,
+    workToAbleHasEarnedIncome,
+    workToAbleHasEmployerPlan,
+    workToAbleEarnedIncome,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (showPlanMaxStopMessage) {
+      pushMessageToTop("plan-max-stop");
+    } else {
+      removeMessageFromOrder("plan-max-stop");
+    }
+  }, [
+    showPlanMaxStopMessage,
+    planMaxBalance,
+    planMaxStopRow,
+    workToAbleTestCompleted,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (showFscEligibility) {
+      pushMessageToTop("fsc-eligibility");
+    } else {
+      removeMessageFromOrder("fsc-eligibility");
+    }
+  }, [
+    showFscEligibility,
+    fscOutcome,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  useEffect(() => {
+    if (zeroBalanceActive) {
+      pushMessageToTop("zero-balance");
+    } else {
+      removeMessageFromOrder("zero-balance");
+    }
+  }, [
+    zeroBalanceActive,
+    zeroBalanceEvent?.label,
+    zeroBalanceYearsLabel,
+    disableNext,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
   const scheduleByYear = useMemo(() => {
     return taxAwareSchedule.reduce<Record<number, typeof taxAwareSchedule>>(
       (acc, row) => {
@@ -949,6 +1157,66 @@ export default function UiPreviewPage() {
       endingBalance,
     };
   }, [filteredMonthlyTotals, startingBalance]);
+  useEffect(() => {
+    if (projectedBalanceActive) {
+      pushMessageToTop("projected-balance");
+    } else {
+      removeMessageFromOrder("projected-balance");
+    }
+  }, [
+    projectedBalanceActive,
+    reportTotals.endingBalance,
+    language,
+    pushMessageToTop,
+    removeMessageFromOrder,
+  ]);
+  const taxableTaxAmount =
+    filteredMonthlyTotals.federalTax + filteredMonthlyTotals.stateTax;
+  const taxableEndingAfterTaxes = reportTotals.endingBalance + taxableTaxAmount;
+  const taxableTotalEconomicValue =
+    reportTotals.totalEarnings + taxableTaxAmount;
+  const comparisonRows = [
+    {
+      label: "Starting balance",
+      able: reportTotals.startingBalance,
+      taxable: reportTotals.startingBalance,
+    },
+    {
+      label: "Contributions",
+      able: reportTotals.totalContributions,
+      taxable: reportTotals.totalContributions,
+    },
+    {
+      label: "Withdrawals",
+      able: reportTotals.totalWithdrawals,
+      taxable: reportTotals.totalWithdrawals,
+    },
+    {
+      label: "Investment returns",
+      able: reportTotals.totalEarnings,
+      taxable: reportTotals.totalEarnings,
+    },
+    {
+      label: "Account ending balance",
+      able: reportTotals.endingBalance,
+      taxable: reportTotals.endingBalance,
+    },
+    {
+      label: "Taxes",
+      able: 0,
+      taxable: taxableTaxAmount,
+    },
+    {
+      label: "Ending value after taxes",
+      able: reportTotals.endingBalance,
+      taxable: taxableEndingAfterTaxes,
+    },
+    {
+      label: "Total economic value created",
+      able: reportTotals.totalEarnings,
+      taxable: taxableTotalEconomicValue,
+    },
+  ];
   const ableCashflows = useMemo(() => {
     if (filteredScheduleRows.length === 0) {
       return [];
@@ -1844,6 +2112,410 @@ export default function UiPreviewPage() {
     </>
   );
 
+  const messageComponentMap: Record<string, JSX.Element | null> = {
+    "ssi-warning": showSsiPrompt ? (
+      <div className="space-y-2 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        <p>
+          Based on your planned contributions, withdrawals and earnings
+          assumptions the account is projected to exceed{" "}
+          {currencyFormatter.format(ssiBalanceLimit)} in {ssiExceedLabel}.
+        </p>
+        <p>
+          This may result in suspension of SSI benefits and have an adverse
+          financial impact.
+        </p>
+        <p>
+          Accordingly, in this planning tool, contributions are stopped in{" "}
+          {ssiExceedLabel}. Recurring withdrawals are also initiated to keep
+          the balance at {currencyFormatter.format(ssiBalanceLimit)} by
+          withdrawing the projected monthly earnings.
+        </p>
+      </div>
+    ) : null,
+    "work-to-able-prompt": showWorkToAblePrompt ? (
+      <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        {copy.workToAble.prompt(currencyFormatter.format(annualLimit))}
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setWorkToAbleDecision("yes")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+              workToAbleDecision !== "undecided" && workToAbleDecision === "yes"
+                ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+            }`}
+          >
+            {copy.misc.yes}
+          </button>
+          <button
+            type="button"
+            onClick={() => setWorkToAbleDecision("no")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+              workToAbleDecision !== "undecided" && workToAbleDecision === "no"
+                ? "bg-[color:var(--theme-danger)] text-[color:var(--theme-accent-text)]"
+                : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+            }`}
+          >
+            {copy.misc.no}
+          </button>
+        </div>
+      </div>
+    ) : null,
+    "work-to-able-decline": workToAbleDeclineActive ? (
+      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        <p>
+          {copy.workToAble.declineMessage(currencyFormatter.format(annualLimit))}
+        </p>
+        <div className="space-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.amountOverLabel}
+          </p>
+          {getOveragePeriodNote(annualOveragePeriod) ? (
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+              {getOveragePeriodNote(annualOveragePeriod)}
+            </p>
+          ) : null}
+          <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {currencyFormatterWhole.format(amountOverAnnualLimit)}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.applyMaxPrompt}
+          </p>
+          {getApplyMaxNote(annualLimit) ? (
+            <p className="text-xs text-[color:var(--theme-warning-text)]">
+              {getApplyMaxNote(annualLimit)}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => applyMaxAllowedContribution(annualLimit)}
+            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+          >
+            {copy.misc.yes}
+          </button>
+        </div>
+      </div>
+    ) : null,
+    "work-to-able-not-eligible": workToAbleNotEligibleActive ? (
+      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        <p className="text-sm font-semibold">
+          {copy.workToAble.ineligibleMessage(
+            currencyFormatter.format(annualLimit),
+          )}
+        </p>
+        <div className="space-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.amountOverLabel}
+          </p>
+          {getOveragePeriodNote(annualOveragePeriod) ? (
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+              {getOveragePeriodNote(annualOveragePeriod)}
+            </p>
+          ) : null}
+          <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {currencyFormatterWhole.format(amountOverAnnualLimit)}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.applyMaxPrompt}
+          </p>
+          {getApplyMaxNote(annualLimit) ? (
+            <p className="text-xs text-[color:var(--theme-warning-text)]">
+              {getApplyMaxNote(annualLimit)}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => applyMaxAllowedContribution(annualLimit)}
+            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+          >
+            {copy.misc.yes}
+          </button>
+        </div>
+      </div>
+    ) : null,
+    "work-to-able-over-limit": workToAbleOverLimitActive ? (
+      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        <p className="text-sm font-semibold">
+          {copy.workToAble.eligibleOver(
+            currencyFormatter.format(workToAbleAdditionalContribution),
+            currencyFormatter.format(combinedLimit),
+          )}
+        </p>
+        <div className="space-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.amountOverCombinedLabel}
+          </p>
+          {getOveragePeriodNote(combinedOveragePeriod) ? (
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
+              {getOveragePeriodNote(combinedOveragePeriod)}
+            </p>
+          ) : null}
+          <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {currencyFormatterWhole.format(amountOverCombinedLimit)}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
+            {copy.workToAble.applyMaxPrompt}
+          </p>
+          {getApplyMaxNote(combinedLimit) ? (
+            <p className="text-xs text-[color:var(--theme-warning-text)]">
+              {getApplyMaxNote(combinedLimit)}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => applyMaxAllowedContribution(combinedLimit)}
+            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
+          >
+            {copy.misc.yes}
+          </button>
+        </div>
+      </div>
+    ) : null,
+    "work-to-able-info": workToAbleInfoActive ? (
+      <div className="space-y-4 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
+        <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+          {copy.workToAble.title}
+        </p>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+            {copy.workToAble.earnedIncomeQuestion}
+          </p>
+          <div className="flex gap-2">
+            {[true, false].map((value) => (
+              <button
+                key={`earned-${value}`}
+                type="button"
+                onClick={() => setWorkToAbleHasEarnedIncome(value)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                  workToAbleHasEarnedIncome === value
+                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                }`}
+              >
+                {value ? copy.misc.yes : copy.misc.no}
+              </button>
+            ))}
+          </div>
+          {workToAbleHasEarnedIncome && (
+            <>
+              <div className="mt-3 space-y-3 text-[color:var(--theme-muted)]">
+                <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                  {copy.tooltips.earnedIncome.prompt}
+                </p>
+                <p className="text-xs leading-relaxed">
+                  {copy.tooltips.earnedIncome.lead}
+                </p>
+                <div className="space-y-1">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                    {copy.tooltips.earnedIncome.includedTitle}
+                  </p>
+                  <ul className="list-disc space-y-1 pl-4 text-xs">
+                    {copy.tooltips.earnedIncome.includedItems.map((item) => (
+                      <li key={`included-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                    {copy.tooltips.earnedIncome.excludedTitle}
+                  </p>
+                  <ul className="list-disc space-y-1 pl-4 text-xs">
+                    {copy.tooltips.earnedIncome.excludedItems.map((item) => (
+                      <li key={`excluded-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <input
+                className="mt-2 h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                value={workToAbleEarnedIncome}
+                onChange={(event) => setWorkToAbleEarnedIncome(event.target.value)}
+              />
+            </>
+          )}
+        </div>
+        {workToAbleHasEarnedIncome && workToAbleIncomeAmount > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+              {copy.workToAble.employerPlanQuestion}
+            </p>
+            <div className="flex gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={`plan-${value}`}
+                  type="button"
+                  onClick={() => setWorkToAbleHasEmployerPlan(value)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                    workToAbleHasEmployerPlan === value
+                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                      : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                  }`}
+                >
+                  {value ? copy.misc.yes : copy.misc.no}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : null,
+    "plan-max-stop": showPlanMaxStopMessage ? (
+      <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+        <p>
+          {copy.warnings.planMaxStop(
+            currencyFormatter.format(planMaxBalance ?? 0),
+            planMaxStopLabel ?? "",
+          )}
+        </p>
+      </div>
+    ) : null,
+    "fsc-eligibility": showFscEligibility ? (
+      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+            {copy.federalSavers.eligibilityTitle}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowFscEligibility(false)}
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-xs font-semibold text-[color:var(--theme-fg)]"
+            aria-label={copy.federalSavers.closeEligibility}
+          >
+            ×
+          </button>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+              {copy.federalSavers.questions.hasTaxLiability}
+            </p>
+            <div className="flex gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={`fsc-tax-${value}`}
+                  type="button"
+                  onClick={() => setFscHasTaxLiability(value)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                    fscHasTaxLiability === value
+                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                      : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                  }`}
+                >
+                  {value ? copy.misc.yes : copy.misc.no}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+              {copy.federalSavers.questions.isOver18}
+            </p>
+            <div className="flex gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={`fsc-age-${value}`}
+                  type="button"
+                  onClick={() => setFscIsOver18(value)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                    fscIsOver18 === value
+                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                      : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                  }`}
+                >
+                  {value ? copy.misc.yes : copy.misc.no}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+              {copy.federalSavers.questions.isStudent}
+            </p>
+            <div className="flex gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={`fsc-student-${value}`}
+                  type="button"
+                  onClick={() => setFscIsStudent(value)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                    fscIsStudent === value
+                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                      : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                  }`}
+                >
+                  {value ? copy.misc.yes : copy.misc.no}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+              {copy.federalSavers.questions.isDependent}
+            </p>
+            <div className="flex gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={`fsc-dependent-${value}`}
+                  type="button"
+                  onClick={() => setFscIsDependent(value)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
+                    fscIsDependent === value
+                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                      : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
+                  }`}
+                >
+                  {value ? copy.misc.yes : copy.misc.no}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={runFscEligibilityCheck}
+            className="w-full rounded-full bg-[color:var(--theme-accent)] px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-accent-text)]"
+          >
+            {copy.buttons.checkEligibility}
+          </button>
+        </div>
+      </div>
+    ) : null,
+    "zero-balance": zeroBalanceEvent && !disableNext ? (
+      <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs leading-relaxed text-[color:var(--theme-warning-text)]">
+        <p>
+          Based on all your inputs, your account balance reaches zero in{" "}
+          <span className="font-semibold text-[color:var(--theme-warning-text)]">
+            {zeroBalanceEvent.label}
+          </span>
+          , {zeroBalanceYearsLabel} years before the end of your time horizon.
+          You can modify your inputs—including time horizon, contributions,
+          withdrawals, and when those streams begin or end—if you’d like to
+          plan differently.
+        </p>
+      </div>
+    ) : null,
+    "projected-balance": !zeroBalanceEvent ? (
+      <div className="flex flex-col gap-2 rounded-2xl border border-[color:var(--theme-info)] bg-[color:var(--theme-info-weak)] p-4 text-xs leading-relaxed text-[color:var(--theme-info-text)]">
+        <p className="font-semibold uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
+          Projected ending balance
+        </p>
+        <p>
+          Based on your inputs, your account is projected to have an ending
+          balance of{" "}
+          <span className="font-semibold text-[color:var(--theme-fg)]">
+            {currencyFormatterWhole.format(reportTotals.endingBalance)}
+          </span>
+          .
+        </p>
+      </div>
+    ) : null,
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col"
@@ -2233,49 +2905,17 @@ export default function UiPreviewPage() {
                       </div>
                     </div>
                     <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.timeHorizonYears}
-                          </p>
-                          <input
-                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            type="number"
-                            min={1}
-                            max={50}
-                            step={1}
-                            value={timeHorizonYears}
-                            onChange={(event) => {
-                              const rawValue = event.target.value;
-                              if (rawValue === "") {
-                                setTimeHorizonYears(rawValue);
-                                return;
-                              }
-                              const parsedValue = Number(rawValue);
-                              if (!Number.isFinite(parsedValue)) {
-                                setTimeHorizonYears(rawValue);
-                                return;
-                              }
-                              const clampedValue = Math.min(
-                                50,
-                                Math.max(1, Math.round(parsedValue)),
-                              );
-                              setTimeHorizonYears(String(clampedValue));
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                            {copy.labels.annualReturnAssumption}
-                          </p>
-                          <input
-                            className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                            value={annualReturnOverride}
-                            onChange={(event) =>
-                              setAnnualReturnOverride(event.target.value)
-                            }
-                          />
-                        </div>
+                      <div className="space-y-2">
+                        <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                          {copy.labels.annualReturnAssumption}
+                        </p>
+                        <input
+                          className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                          value={annualReturnOverride}
+                          onChange={(event) =>
+                            setAnnualReturnOverride(event.target.value)
+                          }
+                        />
                       </div>
                     </div>
                     <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
@@ -2324,36 +2964,66 @@ export default function UiPreviewPage() {
 
               {step === 1 && (
                 <div className="flex min-h-0 flex-1 flex-col gap-6">
-                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr]">
+                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1.25fr_0.73fr]">
                     <div className="flex min-h-0 flex-col">
                       <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
                         <div className="space-y-4">
-                          <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-                            <div className="space-y-2">
-                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                {copy.labels.startingBalance}
-                              </p>
-                              <input
-                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                value={startingBalance}
-                                onChange={(event) =>
-                                  setStartingBalance(event.target.value)
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {timeHorizonLabel}
+                            </p>
+                            <input
+                              className="h-10 min-w-[5rem] w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              type="number"
+                              min={1}
+                              max={50}
+                              step={1}
+                              value={timeHorizonYears}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+                                if (rawValue === "") {
+                                  setTimeHorizonYears(rawValue);
+                                  return;
                                 }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                {copy.labels.upfrontContribution}
-                              </p>
-                              <input
-                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                value={beneficiaryUpfrontContribution}
-                                onChange={(event) =>
-                                  setBeneficiaryUpfrontContribution(event.target.value)
+                                const parsedValue = Number(rawValue);
+                                if (!Number.isFinite(parsedValue)) {
+                                  setTimeHorizonYears(rawValue);
+                                  return;
                                 }
-                              />
-                            </div>
+                                const clampedValue = Math.min(
+                                  50,
+                                  Math.max(1, Math.round(parsedValue)),
+                                );
+                                setTimeHorizonYears(String(clampedValue));
+                              }}
+                            />
                           </div>
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.startingBalance}
+                            </p>
+                            <input
+                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              value={startingBalance}
+                              onChange={(event) =>
+                                setStartingBalance(event.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.upfrontContribution}
+                            </p>
+                            <input
+                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              value={beneficiaryUpfrontContribution}
+                              onChange={(event) =>
+                                setBeneficiaryUpfrontContribution(event.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
                           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
                             {copy.labels.contributionsParent}
                           </p>
@@ -2544,7 +3214,7 @@ export default function UiPreviewPage() {
                           {copy.labels.monthlyWithdrawalsTitle}
                             </p>
                             <div className="grid gap-4 sm:grid-cols-3">
-                              <div className="space-y-2">
+                              <div className="space-y-2 mt-1.5">
                                 <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                               {copy.labels.amountShort}
                                 </p>
@@ -2742,406 +3412,19 @@ export default function UiPreviewPage() {
                         </div>
                       </div>
                     </div>
-                    <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5">
-                  {showSsiPrompt ? (
-                    <div className="space-y-2 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                      <p>
-                        Based on your planned contributions, withdrawals and earnings
-                        assumptions the account is projected to exceed{" "}
-                        {currencyFormatter.format(ssiBalanceLimit)} in{" "}
-                        {ssiExceedLabel}.
-                      </p>
-                      <p>
-                        This may result in suspension of SSI benefits and have an
-                        adverse financial impact.
-                      </p>
-                      <p>
-                        Accordingly, in this planning tool, contributions are
-                        stopped in {ssiExceedLabel}. Recurring withdrawals are
-                        also initiated to keep the balance at{" "}
-                        {currencyFormatter.format(ssiBalanceLimit)} by
-                        withdrawing the projected monthly earnings.
-                      </p>
-                    </div>
-                  ) : null}
-                  {showWorkToAblePrompt && (
-                    <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                      {copy.workToAble.prompt(currencyFormatter.format(annualLimit))}
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setWorkToAbleDecision("yes")}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                            workToAbleDecision !== "undecided" && workToAbleDecision === "yes"
-                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                              : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                          }`}
-                        >
-                          {copy.misc.yes}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setWorkToAbleDecision("no")}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                            workToAbleDecision !== "undecided" && workToAbleDecision === "no"
-                              ? "bg-[color:var(--theme-danger)] text-[color:var(--theme-accent-text)]"
-                              : "border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                          }`}
-                        >
-                          {copy.misc.no}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {workToAbleDecision !== "undecided" && workToAbleDecision === "no" && exceedsLimit ? (
-                    <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                      <p>
-                        {copy.workToAble.declineMessage(
-                          currencyFormatter.format(annualLimit),
-                        )}
-                      </p>
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                          {copy.workToAble.amountOverLabel}
-                        </p>
-                        {getOveragePeriodNote(annualOveragePeriod) ? (
-                          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                            {getOveragePeriodNote(annualOveragePeriod)}
-                          </p>
-                        ) : null}
-                        <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                          {currencyFormatterWhole.format(amountOverAnnualLimit)}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                          {copy.workToAble.applyMaxPrompt}
-                        </p>
-                        {getApplyMaxNote(annualLimit) ? (
-                          <p className="text-xs text-[color:var(--theme-warning-text)]">
-                            {getApplyMaxNote(annualLimit)}
-                          </p>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => applyMaxAllowedContribution(annualLimit)}
-                          className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
-                        >
-                          {copy.misc.yes}
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
+                    <aside className="space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 overflow-y-auto max-h-[calc(100vh-16rem)] min-h-0">
+                      {messageOrder.map((key) => {
+                        const component = messageComponentMap[key];
+                        if (!component) {
+                          return null;
+                        }
+                        return (
+                          <Fragment key={`right-card-message-${key}`}>
+                            {component}
+                          </Fragment>
+                        );
+                      })}
 
-                  {workToAbleDecision !== "undecided" && workToAbleDecision === "yes" && workToAbleTestFinalized ? (
-                    <>
-                      {workToAbleNotEligible && exceedsLimit ? (
-                        <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                          <p className="text-sm font-semibold">
-                            {copy.workToAble.ineligibleMessage(
-                              currencyFormatter.format(annualLimit),
-                            )}
-                          </p>
-                          <div className="space-y-1">
-                            <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                              {copy.workToAble.amountOverLabel}
-                            </p>
-                            {getOveragePeriodNote(annualOveragePeriod) ? (
-                              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                                {getOveragePeriodNote(annualOveragePeriod)}
-                              </p>
-                            ) : null}
-                            <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                              {currencyFormatterWhole.format(
-                                amountOverAnnualLimit,
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                              {copy.workToAble.applyMaxPrompt}
-                            </p>
-                            {getApplyMaxNote(annualLimit) ? (
-                              <p className="text-xs text-[color:var(--theme-warning-text)]">
-                                {getApplyMaxNote(annualLimit)}
-                              </p>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                applyMaxAllowedContribution(annualLimit)
-                              }
-                              className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
-                            >
-                              {copy.misc.yes}
-                            </button>
-                          </div>
-                        </div>
-                      ) : workToAbleOverLimit ? (
-                        <div className="space-y-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                          <p className="text-sm font-semibold">
-                            {copy.workToAble.eligibleOver(
-                              currencyFormatter.format(
-                                workToAbleAdditionalContribution,
-                              ),
-                              currencyFormatter.format(combinedLimit),
-                            )}
-                          </p>
-                          <div className="space-y-1">
-                            <p className="text-xs font-bold uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                              {copy.workToAble.amountOverCombinedLabel}
-                            </p>
-                            {getOveragePeriodNote(combinedOveragePeriod) ? (
-                              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-[color:var(--theme-warning-text)]">
-                                {getOveragePeriodNote(combinedOveragePeriod)}
-                              </p>
-                            ) : null}
-                            <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                              {currencyFormatterWhole.format(
-                                amountOverCombinedLimit,
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-sm font-semibold text-[color:var(--theme-warning-text)]">
-                              {copy.workToAble.applyMaxPrompt}
-                            </p>
-                            {getApplyMaxNote(combinedLimit) ? (
-                              <p className="text-xs text-[color:var(--theme-warning-text)]">
-                                {getApplyMaxNote(combinedLimit)}
-                              </p>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                applyMaxAllowedContribution(combinedLimit)
-                              }
-                              className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-warning-text)] shadow-sm"
-                            >
-                              {copy.misc.yes}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : workToAbleDecision !== "undecided" && workToAbleDecision === "yes" ? (
-                    <div className="space-y-4 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
-                      <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                        {copy.workToAble.title}
-                      </p>
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                          {copy.workToAble.earnedIncomeQuestion}
-                        </p>
-                        <div className="flex gap-2">
-                          {[true, false].map((value) => (
-                            <button
-                              key={`earned-${value}`}
-                              type="button"
-                              onClick={() => setWorkToAbleHasEarnedIncome(value)}
-                              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                workToAbleHasEarnedIncome === value
-                                  ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                  : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                              }`}
-                            >
-                              {value ? copy.misc.yes : copy.misc.no}
-                            </button>
-                          ))}
-                        </div>
-                        {workToAbleHasEarnedIncome && (
-                          <>
-                            <div className="mt-3 space-y-3 text-[color:var(--theme-muted)]">
-                              <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                                {copy.tooltips.earnedIncome.prompt}
-                              </p>
-                              <p className="text-xs leading-relaxed">
-                                {copy.tooltips.earnedIncome.lead}
-                              </p>
-                              <div className="space-y-1">
-                                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                  {copy.tooltips.earnedIncome.includedTitle}
-                                </p>
-                                <ul className="list-disc space-y-1 pl-4 text-xs">
-                                  {copy.tooltips.earnedIncome.includedItems.map(
-                                    (item) => (
-                                      <li key={`included-${item}`}>{item}</li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                  {copy.tooltips.earnedIncome.excludedTitle}
-                                </p>
-                                <ul className="list-disc space-y-1 pl-4 text-xs">
-                                  {copy.tooltips.earnedIncome.excludedItems.map(
-                                    (item) => (
-                                      <li key={`excluded-${item}`}>{item}</li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                            </div>
-                            <input
-                              className="mt-2 h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                              value={workToAbleEarnedIncome}
-                              onChange={(event) =>
-                                setWorkToAbleEarnedIncome(event.target.value)
-                              }
-                            />
-                          </>
-                        )}
-                      </div>
-                      {workToAbleHasEarnedIncome &&
-                      workToAbleIncomeAmount > 0 ? (
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                            {copy.workToAble.employerPlanQuestion}
-                          </p>
-                          <div className="flex gap-2">
-                            {[true, false].map((value) => (
-                              <button
-                                key={`plan-${value}`}
-                                type="button"
-                                onClick={() =>
-                                  setWorkToAbleHasEmployerPlan(value)
-                                }
-                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                  workToAbleHasEmployerPlan === value
-                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                                }`}
-                              >
-                                {value ? copy.misc.yes : copy.misc.no}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {showPlanMaxStopMessage ? (
-                    <div className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                      <p>
-                        {copy.warnings.planMaxStop(
-                          currencyFormatter.format(planMaxBalance ?? 0),
-                          planMaxStopLabel ?? "",
-                        )}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {showFscEligibility && (
-                    <div className="space-y-3 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                          {copy.federalSavers.eligibilityTitle}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowFscEligibility(false)}
-                          className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-xs font-semibold text-[color:var(--theme-fg)]"
-                          aria-label={copy.federalSavers.closeEligibility}
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                            {copy.federalSavers.questions.hasTaxLiability}
-                          </p>
-                          <div className="flex gap-2">
-                            {[true, false].map((value) => (
-                              <button
-                                key={`fsc-tax-${value}`}
-                                type="button"
-                                onClick={() => setFscHasTaxLiability(value)}
-                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                  fscHasTaxLiability === value
-                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                                }`}
-                              >
-                                {value ? copy.misc.yes : copy.misc.no}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                            {copy.federalSavers.questions.isOver18}
-                          </p>
-                          <div className="flex gap-2">
-                            {[true, false].map((value) => (
-                              <button
-                                key={`fsc-age-${value}`}
-                                type="button"
-                                onClick={() => setFscIsOver18(value)}
-                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                  fscIsOver18 === value
-                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                                }`}
-                              >
-                                {value ? copy.misc.yes : copy.misc.no}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                            {copy.federalSavers.questions.isStudent}
-                          </p>
-                          <div className="flex gap-2">
-                            {[true, false].map((value) => (
-                              <button
-                                key={`fsc-student-${value}`}
-                                type="button"
-                                onClick={() => setFscIsStudent(value)}
-                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                  fscIsStudent === value
-                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                                }`}
-                              >
-                                {value ? copy.misc.yes : copy.misc.no}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                            {copy.federalSavers.questions.isDependent}
-                          </p>
-                          <div className="flex gap-2">
-                            {[true, false].map((value) => (
-                              <button
-                                key={`fsc-dependent-${value}`}
-                                type="button"
-                                onClick={() => setFscIsDependent(value)}
-                                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition ${
-                                  fscIsDependent === value
-                                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                    : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-[color:var(--theme-fg)] shadow-sm"
-                                }`}
-                              >
-                                {value ? copy.misc.yes : copy.misc.no}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={runFscEligibilityCheck}
-                          className="w-full rounded-full bg-[color:var(--theme-accent)] px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-accent-text)]"
-                        >
-                          {copy.buttons.checkEligibility}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                     {showAdvancedBudgetBreakdown && (
                       <div className="space-y-3 rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-4">
                         <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
@@ -3186,6 +3469,37 @@ export default function UiPreviewPage() {
 
             {step === 2 && (
               <div className="space-y-6">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                    Report view
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportViewMode("default")}
+                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                        reportViewMode === "default"
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                      }`}
+                    >
+                      Summary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportViewMode("table")}
+                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                        reportViewMode === "table"
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                      }`}
+                    >
+                      Tabular
+                    </button>
+                  </div>
+                </div>
+                {reportViewMode === "default" ? (
+                  <Fragment>
             <div className="grid gap-6 lg:grid-cols-2 items-stretch">
                 <div className="flex h-full">
                   <div className="flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-4 pt-3">
@@ -3558,6 +3872,67 @@ export default function UiPreviewPage() {
                     {copy.buttons.openSchedule}
                   </button>
                 </div>
+                </Fragment>
+              ) : (
+                <div className="space-y-6">
+                  <div className="rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-2xl shadow-[color:var(--theme-border)]/20">
+                    <div className="flex items-end justify-between">
+                      <div className="space-y-1">
+                        <p className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                          Tabular comparison
+                        </p>
+                        <p className="text-2xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
+                          Able vs. Taxable performance
+                        </p>
+                        <p className="text-xs text-[color:var(--theme-muted)]">
+                          Upside + downside reflected side-by-side
+                        </p>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[color:var(--theme-accent)]/80 to-[color:var(--theme-accent)]/30 shadow-lg" />
+                    </div>
+                    <div className="mt-6 space-y-3 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-6 shadow-inner">
+                      <div className="grid grid-cols-[1.6fr_1fr_1fr] gap-4 text-[0.65rem] uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                        <span>Metric</span>
+                        <span className="text-center">Able</span>
+                        <span className="text-center">Taxable</span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {comparisonRows.map((row, index) => (
+                          <div
+                            key={row.label}
+                            className={`grid grid-cols-[1.6fr_1fr_1fr] items-center gap-6 rounded-2xl border border-transparent bg-gradient-to-br from-[color:var(--theme-surface-1)] to-[color:var(--theme-bg)] p-5 text-3xl font-semibold text-[color:var(--theme-fg)] transition hover:-translate-y-0.5 hover:bg-[color:var(--theme-surface)]`}
+                            style={{
+                              boxShadow:
+                                index % 2 === 0
+                                  ? "0 12px 30px rgba(15, 23, 42, 0.08)"
+                                  : "0 12px 30px rgba(15, 23, 42, 0.04)",
+                            }}
+                          >
+                            <div className="space-y-1 text-sm uppercase tracking-[0.25em] text-[color:var(--theme-muted)]">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`h-2.5 w-2.5 rounded-full ${
+                                    index % 2 === 0
+                                      ? "bg-[color:var(--theme-accent)]"
+                                      : "bg-[color:var(--theme-muted)]"
+                                  }`}
+                                />
+                                <span>{row.label}</span>
+                              </div>
+                            </div>
+                            <div className="text-right text-3xl font-semibold text-[color:var(--theme-accent)]">
+                              {formatCurrencyForComparison(row.able)}
+                            </div>
+                            <div className="text-right text-3xl font-semibold text-[color:var(--theme-fg)]">
+                              {formatCurrencyForComparison(row.taxable)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               </div>
             )}
 
