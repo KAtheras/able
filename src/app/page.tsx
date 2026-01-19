@@ -534,15 +534,6 @@ export default function UiPreviewPage() {
     minWithdrawalYear,
   ]);
 
-  useEffect(() => {
-    const horizon = Math.min(50, Math.max(1, parseNumber(timeHorizonYears)));
-    if (Number.isFinite(horizon) && horizon <= 3) {
-      setAnnualReturnOverride("4.00");
-      return;
-    }
-    setAnnualReturnOverride("6.00");
-  }, [timeHorizonYears]);
-
   const [calcData, setCalcData] = useState<CalculationResult | null>(null);
   const [calcError, setCalcError] = useState<string | null>(null);
 
@@ -3001,7 +2992,7 @@ export default function UiPreviewPage() {
                                   onChange={(event) =>
                                     setIsSsiBeneficiary(event.target.checked)
                                   }
-                                  className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100"
+                                  className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100 square-checkbox"
                                 />
                                 <span>{copy.labels.ssiBenefitsQuestion}</span>
                               </label>
@@ -3479,7 +3470,7 @@ export default function UiPreviewPage() {
                               setShowFscEligibility(true);
                             }}
                             style={fscButtonStyle(fscOutcome)}
-                            className="w-full rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                            className="mt-4 h-10 w-full rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
                           >
                             {fscOutcome === "eligible"
                               ? copy.federalSavers.buttonEligible
