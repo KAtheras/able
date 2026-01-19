@@ -2112,7 +2112,7 @@ export default function UiPreviewPage() {
     </>
   );
 
-  const messageComponentMap: Record<string, JSX.Element | null> = {
+  const messageComponentMap: Record<string, React.ReactNode> = {
     "ssi-warning": showSsiPrompt ? (
       <div className="space-y-2 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
         <p>
