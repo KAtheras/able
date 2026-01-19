@@ -86,6 +86,20 @@ function describeArc(
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 }
 
+const advancedBudgetFields = [
+  { key: "housing", label: "Housing" },
+  { key: "healthcare", label: "Healthcare" },
+  { key: "transportation", label: "Transportation" },
+  { key: "education", label: "Education" },
+  { key: "other", label: "Other" },
+] as const;
+type AdvancedBudgetKey = (typeof advancedBudgetFields)[number]["key"];
+
+function formatCurrencyInput(value: number) {
+  const fixed = Number.isFinite(value) ? value.toFixed(2) : "0";
+  return fixed.replace(/\.00$/, "");
+}
+
 function calculateMonthlyIrr(cashflows: number[]) {
   const hasInflow = cashflows.some((value) => value > 0);
   const hasOutflow = cashflows.some((value) => value < 0);
@@ -214,6 +228,15 @@ export default function UiPreviewPage() {
   const [showContributionEndPicker, setShowContributionEndPicker] =
     useState(false);
   const [withdrawalPlanDecision, setWithdrawalPlanDecision] = useState(true);
+  const [showAdvancedBudgetBreakdown, setShowAdvancedBudgetBreakdown] =
+    useState(false);
+  const [advancedBudgetValues, setAdvancedBudgetValues] = useState(
+    () =>
+      advancedBudgetFields.reduce((acc, field) => {
+        acc[field.key] = "0";
+        return acc;
+      }, {} as Record<AdvancedBudgetKey, string>),
+  );
   const [showFscEligibility, setShowFscEligibility] = useState(false);
   const [fscOutcome, setFscOutcome] = useState<"eligible" | "ineligible" | null>(
     null,
@@ -418,11 +441,6 @@ export default function UiPreviewPage() {
       }),
     [copy.locale],
   );
-
-  const formatContributionValue = (value: number) => {
-    const fixed = Number.isFinite(value) ? value.toFixed(2) : "0";
-    return fixed.replace(/\.00$/, "");
-  };
 
   const pdfFootnotes = useMemo(() => [...copy.misc.pdfFootnotes], [copy.misc.pdfFootnotes]);
   const pdfDisclosures = useMemo(() => [...copy.misc.pdfDisclosures], [copy.misc.pdfDisclosures]);
@@ -745,7 +763,7 @@ export default function UiPreviewPage() {
         beneficiaryRecurringCadence === "monthly" ? limit / 12 : limit;
       const roundedDown = Math.floor(Math.max(0, maxRecurring) * 100) / 100;
       nextRecurring = roundedDown;
-      setBeneficiaryRecurringContribution(formatContributionValue(roundedDown));
+      setBeneficiaryRecurringContribution(formatCurrencyInput(roundedDown));
     }
     const nextCurrentYearRecurring =
       beneficiaryRecurringCadence === "monthly"
@@ -755,7 +773,7 @@ export default function UiPreviewPage() {
     if (currentYearTotal > limit) {
       const adjustedUpfront = Math.max(0, limit - nextCurrentYearRecurring);
       const roundedUpfront = Math.floor(adjustedUpfront * 100) / 100;
-      setBeneficiaryUpfrontContribution(formatContributionValue(roundedUpfront));
+      setBeneficiaryUpfrontContribution(formatCurrencyInput(roundedUpfront));
     }
   };
   const getApplyMaxNote = (limit: number) => {
@@ -778,6 +796,19 @@ export default function UiPreviewPage() {
     }
     return null;
   };
+  useEffect(() => {
+    if (!showAdvancedBudgetBreakdown) {
+      return;
+    }
+    const sum = advancedBudgetFields.reduce(
+      (acc, field) => acc + parseNumber(advancedBudgetValues[field.key] ?? "0"),
+      0,
+    );
+    const formatted = formatCurrencyInput(sum);
+    if (formatted !== monthlyWithdrawalAmount) {
+      setMonthlyWithdrawalAmount(formatted);
+    }
+  }, [advancedBudgetValues, showAdvancedBudgetBreakdown, monthlyWithdrawalAmount]);
   const disableNextForLimit = step === 1 && exceedsCombinedLimit;
   const disableNextForWarning = false;
   const disableNextForResidency =
@@ -2678,9 +2709,17 @@ export default function UiPreviewPage() {
                                 <div className="h-[0.9rem]" />
                                 <button
                                   type="button"
-                                  className="h-10 w-full rounded-full bg-[color:var(--theme-muted)] text-[0.65rem] font-bold uppercase tracking-[0.3em] text-white shadow-sm transition hover:opacity-90"
+                                  aria-pressed={showAdvancedBudgetBreakdown}
+                                  onClick={() =>
+                                    setShowAdvancedBudgetBreakdown((prev) => !prev)
+                                  }
+                                  className={`flex h-10 w-full items-center justify-center rounded-full text-[0.65rem] font-bold uppercase tracking-[0.3em] shadow-sm transition ${
+                                    showAdvancedBudgetBreakdown
+                                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                      : "bg-[color:var(--theme-muted)] text-white hover:opacity-90"
+                                  }`}
                                 >
-                              {copy.labels.advanced}
+                                  {copy.labels.advanced}
                                 </button>
                               </div>
                             </div>
@@ -3103,15 +3142,44 @@ export default function UiPreviewPage() {
                       </div>
                     </div>
                   )}
-                  <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
-                    {copy.misc.disclosureCards.accountActivity.map(
-                      (paragraph, index) => (
-                        <p key={`accountActivity-${index}`}>{paragraph}</p>
-                      ),
+                    {showAdvancedBudgetBreakdown && (
+                      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-4">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                          Monthly budget breakdown
+                        </p>
+                        <div className="space-y-3">
+                          {advancedBudgetFields.map((field) => (
+                            <div key={field.key} className="space-y-1">
+                              <label className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                {field.label}
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={advancedBudgetValues[field.key]}
+                                onChange={(event) =>
+                                  setAdvancedBudgetValues((prev) => ({
+                                    ...prev,
+                                    [field.key]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                    </aside>
-                  </div>
+                    <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                      {copy.misc.disclosureCards.accountActivity.map(
+                        (paragraph, index) => (
+                          <p key={`accountActivity-${index}`}>{paragraph}</p>
+                        ),
+                      )}
+                    </div>
+                  </aside>
+                </div>
                 </div>
               )}
             </div>
