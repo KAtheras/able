@@ -247,7 +247,7 @@ export const uiPreviewCopy = {
     buttons: {
       back: "Back",
       next: "Next",
-      openSchedule: "View Amortization Schedule",
+      openSchedule: "Amortization",
       done: "Done",
       planMonthlyWithdrawals: "Plan monthly withdrawals",
       checkEligibility: "Check eligibility",
@@ -644,7 +644,7 @@ export const uiPreviewCopy = {
     buttons: {
       back: "Atrás",
       next: "Siguiente",
-      openSchedule: "Ver calendario de amortización",
+      openSchedule: "Amortización",
       done: "Listo",
       planMonthlyWithdrawals: "Planificar retiros mensuales",
       checkEligibility: "Verificar elegibilidad",

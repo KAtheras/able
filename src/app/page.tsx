@@ -2575,7 +2575,7 @@ const comparisonRows = [
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="flex flex-col"
       style={{
         ...themeVars,
         backgroundColor: "var(--theme-bg)",
@@ -2725,14 +2725,7 @@ const comparisonRows = [
             ) : null}
             <div className="overflow-x-auto rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)]">
               <table className="min-w-full divide-y divide-[color:var(--theme-border)] text-left text-xs">
-                <thead className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
-                  <tr>
-                    <th className="px-3 py-2" colSpan={5} />
-                    <th className="px-3 py-2 text-center" colSpan={4}>
-                      {copy.table.taxBenefitsHeading}
-                    </th>
-                  </tr>
-                  <tr>
+                <thead className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]"><tr>
                     {[
                       copy.table.month,
                       copy.table.contributions,
