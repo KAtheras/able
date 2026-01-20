@@ -362,6 +362,7 @@ export const uiPreviewCopy = {
       contributionsWithdrawals: "Contributions / Withdrawals",
       amortizationSchedule: "Amortization schedule",
       downloadScheduleButton: "Download amortization schedule (Excel)",
+      close: "Close",
     },
     accessibility: {
       printReport: "Print report",
@@ -760,6 +761,7 @@ export const uiPreviewCopy = {
       contributionsWithdrawals: "Contribuciones / Retiros",
       amortizationSchedule: "Calendario de amortización",
       downloadScheduleButton: "Descargar calendario de amortización (Excel)",
+      close: "Cerrar",
     },
     accessibility: {
       printReport: "Imprimir informe",
