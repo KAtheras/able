@@ -1170,25 +1170,28 @@ export default function UiPreviewPage() {
   ]);
   const taxableTaxAmount =
     filteredMonthlyTotals.federalTax + filteredMonthlyTotals.stateTax;
-  const taxableEndingAfterTaxes = reportTotals.endingBalance + taxableTaxAmount;
+  const taxableEndingAfterTaxes = reportTotals.endingBalance - taxableTaxAmount;
   const taxableTotalEconomicValue =
-    reportTotals.totalEarnings + taxableTaxAmount;
-  const comparisonRows = [
-    {
-      label: "Starting balance",
-      able: reportTotals.startingBalance,
-      taxable: reportTotals.startingBalance,
-    },
-    {
-      label: "Contributions",
-      able: reportTotals.totalContributions,
-      taxable: reportTotals.totalContributions,
-    },
-    {
-      label: "Withdrawals",
-      able: reportTotals.totalWithdrawals,
-      taxable: reportTotals.totalWithdrawals,
-    },
+    reportTotals.totalEarnings - taxableTaxAmount;
+const ableTaxSavings =
+  Math.abs(filteredMonthlyTotals.federalSaversCredit) +
+  Math.abs(filteredMonthlyTotals.stateDeductionCredit);
+const comparisonRows = [
+  {
+    label: "Starting balance",
+    able: reportTotals.startingBalance,
+    taxable: reportTotals.startingBalance,
+  },
+  {
+    label: "Contributions",
+    able: reportTotals.totalContributions,
+    taxable: reportTotals.totalContributions,
+  },
+  {
+    label: "Withdrawals",
+    able: -reportTotals.totalWithdrawals,
+    taxable: -reportTotals.totalWithdrawals,
+  },
     {
       label: "Investment returns",
       able: reportTotals.totalEarnings,
@@ -1198,23 +1201,27 @@ export default function UiPreviewPage() {
       label: "Account ending balance",
       able: reportTotals.endingBalance,
       taxable: reportTotals.endingBalance,
-    },
-    {
-      label: "Taxes",
-      able: 0,
-      taxable: taxableTaxAmount,
-    },
+  },
+  {
+    label: "Taxes",
+    able: ableTaxSavings,
+    taxable: -taxableTaxAmount,
+  },
     {
       label: "Ending value after taxes",
-      able: reportTotals.endingBalance,
+      able: reportTotals.endingBalance + ableTaxSavings,
       taxable: taxableEndingAfterTaxes,
     },
     {
       label: "Total economic value created",
-      able: reportTotals.totalEarnings,
+      able: reportTotals.totalEarnings + ableTaxSavings,
       taxable: taxableTotalEconomicValue,
-    },
-  ];
+  },
+];
+  const comparisonLabelClassName =
+    "text-[0.9rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] opacity-80";
+  const comparisonPillClassName =
+    "w-full rounded-2xl border border-[color:rgba(15,23,42,0.08)] bg-[color:var(--theme-surface-1)] px-5 py-1.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.08)] transition hover:border-[color:rgba(15,23,42,0.15)]";
   const ableCashflows = useMemo(() => {
     if (filteredScheduleRows.length === 0) {
       return [];
@@ -2072,6 +2079,13 @@ export default function UiPreviewPage() {
     setShowContributionEndPicker(false);
   }, [step, showSchedule]);
 
+  const showReportTabs = step === steps.length - 1 || showSchedule;
+  const isSummaryTabActive =
+    step === steps.length - 1 && !showSchedule && reportViewMode === "default";
+  const isTabularTabActive =
+    step === steps.length - 1 && !showSchedule && reportViewMode === "table";
+  const isAmortizationTabActive = showSchedule;
+
   const actionControls = (
     <>
       {step < steps.length - 1 && (
@@ -2568,11 +2582,11 @@ export default function UiPreviewPage() {
         color: "var(--theme-fg)",
       }}
     >
-      <div className="relative mx-auto flex w-full max-w-[90rem] flex-1 flex-col gap-2 px-4 pb-6 pt-0">
+      <div className="relative mx-auto flex w-full max-w-[90rem] flex-1 flex-col gap-0 px-4 pb-6 pt-0">
         <div className="pointer-events-none absolute -left-32 top-10 h-40 w-40 rounded-full bg-[color:var(--theme-accent)]/20 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 top-40 h-48 w-48 rounded-full bg-[color:var(--theme-accent)]/15 blur-3xl" />
 
-        <header className="flex shrink-0 flex-col gap-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-[0.96rem] shadow-lg backdrop-blur">
+        <header className="flex shrink-0 flex-col gap-2 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-2 shadow-lg backdrop-blur">
           <p className="text-xs uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
             {copy.header.bannerPlaceholder}
           </p>
@@ -2605,47 +2619,78 @@ export default function UiPreviewPage() {
         </header>
 
         {showSchedule ? (
-          <section className="flex flex-1 min-h-0 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-lg backdrop-blur max-[1024px]:pb-28">
+          <section className="flex flex-1 min-h-0 flex-col space-y-1 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-2 shadow-lg backdrop-blur max-[1024px]:pb-28">
             <div className="flex w-full items-center gap-3 max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
-              <div className="flex items-center gap-3">
+              <div className="flex-1" />
+              <div className="flex items-center gap-2">
+                {showReportTabs && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(steps.length - 1);
+                        setShowSchedule(false);
+                        setReportViewMode("default");
+                      }}
+                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                        isSummaryTabActive
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                      }`}
+                    >
+                      Summary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(steps.length - 1);
+                        setShowSchedule(false);
+                        setReportViewMode("table");
+                      }}
+                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                        isTabularTabActive
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                      }`}
+                    >
+                      Tabular
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(steps.length - 1);
+                        setShowSchedule(true);
+                      }}
+                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                        isAmortizationTabActive
+                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                      }`}
+                    >
+                      {copy.buttons.openSchedule}
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (showSchedule) {
-                      setShowSchedule(false);
-                    } else {
-                      setStep((prev) => Math.max(0, prev - 1));
-                    }
-                  }}
-                  disabled={step === 0 && !showSchedule}
-                  aria-label={copy.buttons.back}
+                  onClick={handleDownloadAmortizationCsv}
+                  disabled={filteredScheduleRows.length === 0}
+                  aria-label={copy.misc.downloadScheduleButton}
                   className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
                 >
-                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
-                    <path
-                      d="M13 4l-6 6 6 6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 12h12M10 5v7l3-3M10 12l-3-3" />
                   </svg>
                 </button>
-              </div>
-              <div className="flex-1 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSchedule(false);
-                    setStep(1);
-                  }}
-                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
-                >
-                  {copy.misc.contributionsWithdrawals}
-                </button>
-              </div>
-              <div>
                 <div className="flex items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
                   <span className="sr-only">{copy.languageLabel}</span>
                   {(["en", "es"] as const).map((lang) => (
@@ -2673,16 +2718,6 @@ export default function UiPreviewPage() {
               </h2>
               <span />
             </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleDownloadAmortizationCsv}
-                disabled={filteredScheduleRows.length === 0}
-                className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition disabled:opacity-40 disabled:hover:opacity-40 hover:opacity-90"
-              >
-                {copy.misc.downloadScheduleButton}
-              </button>
-            </div>
             {calcError ? (
               <p className="rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] px-4 py-2 text-xs text-[color:var(--theme-warning-text)]">
                 {calcError}
@@ -2693,10 +2728,7 @@ export default function UiPreviewPage() {
                 <thead className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
                   <tr>
                     <th className="px-3 py-2" colSpan={5} />
-                    <th
-                      className="px-3 py-2 text-center border-b border-[color:var(--theme-border)]"
-                      colSpan={4}
-                    >
+                    <th className="px-3 py-2 text-center" colSpan={4}>
                       {copy.table.taxBenefitsHeading}
                     </th>
                   </tr>
@@ -2858,7 +2890,7 @@ export default function UiPreviewPage() {
                     <span className="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
                       {copy.misc.stepHeaders.horizonPrompt}
                     </span>
-                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-2 py-1">
+                    <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-2 py-1">
                       {availableHorizons.map((value) => {
                         const label =
                           value === "max"
@@ -2870,7 +2902,7 @@ export default function UiPreviewPage() {
                             key={`horizon-${value}`}
                             type="button"
                             onClick={() => setSelectedHorizon(value)}
-                            className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.25em] transition ${
+                        className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.25em] transition whitespace-nowrap ${
                               isActive
                                 ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
                                 : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
@@ -2889,11 +2921,52 @@ export default function UiPreviewPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="hidden items-center justify-end gap-2 lg:flex">
-                {actionControls}
+              <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  {step === steps.length - 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setReportViewMode("default")}
+                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                          reportViewMode === "default"
+                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                        }`}
+                      >
+                        Summary
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReportViewMode("table")}
+                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                          reportViewMode === "table"
+                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                        }`}
+                      >
+                        Tabular
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSchedule(true)}
+                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
+                          showSchedule
+                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
+                        }`}
+                      >
+                        {copy.buttons.openSchedule}
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="hidden items-center justify-end gap-2 lg:flex">
+                  {actionControls}
+                </div>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto h-full gap-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto h-full gap-2">
               {step === 0 && (
                 <div className="flex min-h-0 flex-1 flex-col gap-6 h-full">
                   <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr] h-full items-stretch">
@@ -3537,39 +3610,10 @@ export default function UiPreviewPage() {
             </div>
 
             {step === 2 && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                    Report view
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportViewMode("default")}
-                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                        reportViewMode === "default"
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                      }`}
-                    >
-                      Summary
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReportViewMode("table")}
-                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                        reportViewMode === "table"
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                      }`}
-                    >
-                      Tabular
-                    </button>
-                  </div>
-                </div>
+            <div className="space-y-1 mt-0">
                 {reportViewMode === "default" ? (
                   <Fragment>
-            <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+            <div className="grid gap-2 lg:grid-cols-2 items-stretch mt-0">
                 <div className="flex h-full">
                   <div className="flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-4 pt-3">
                       <div className="flex min-h-[2.5rem] items-center justify-between gap-2">
@@ -3643,8 +3687,8 @@ export default function UiPreviewPage() {
                   </div>
                 </div>
                 <div className="relative flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-0 pt-3">
-                    <div className="flex flex-wrap items-end justify-between gap-2">
-                      <div className="flex items-end gap-2 border-b border-[color:var(--theme-border)] pb-0">
+                      <div className="flex flex-wrap items-end justify-between gap-2">
+                      <div className="flex items-end gap-2">
                         <button
                           type="button"
                           onClick={() => setShowAnnualReturns(false)}
@@ -3656,18 +3700,6 @@ export default function UiPreviewPage() {
                         >
                           {copy.report.cards.taxBenefits.label}
                         </button>
-                        {!showAnnualReturns ? (
-                          <button
-                            type="button"
-                            aria-label={copy.report.taxBenefits.infoLabel}
-                            className="group relative flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[0.7rem] font-extrabold text-[color:var(--theme-accent-text)] transition hover:opacity-90 focus-visible:opacity-90"
-                          >
-                            i
-                            <span className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 w-56 rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs normal-case tracking-normal text-[color:var(--theme-fg)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                              {copy.report.taxBenefits.tooltip}
-                            </span>
-                          </button>
-                        ) : null}
                         <button
                           type="button"
                           onClick={() => setShowAnnualReturns(true)}
@@ -3680,7 +3712,7 @@ export default function UiPreviewPage() {
                           {copy.report.cards.averageAnnualReturns.label}
                         </button>
                       </div>
-                      <div className="flex items-center gap-1 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em]">
+                      <div className="flex items-center gap-1 rounded-full bg-[color:var(--theme-surface-1)] p-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em]">
                         <button
                           type="button"
                           onClick={() => setRightCardView("charts")}
@@ -3932,68 +3964,64 @@ export default function UiPreviewPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowSchedule(true)}
-                    className="rounded-full bg-[color:var(--theme-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-accent-text)] transition hover:opacity-90"
-                  >
-                    {copy.buttons.openSchedule}
-                  </button>
-                </div>
                 </Fragment>
               ) : (
-                <div className="space-y-6">
-                  <div className="rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 shadow-2xl shadow-[color:var(--theme-border)]/20">
-                    <div className="flex items-end justify-between">
-                      <div className="space-y-1">
-                        <p className="text-[0.65rem] uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
-                          Tabular comparison
-                        </p>
-                        <p className="text-2xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
-                          Able vs. Taxable performance
-                        </p>
-                        <p className="text-xs text-[color:var(--theme-muted)]">
-                          Upside + downside reflected side-by-side
-                        </p>
+                <div className="px-6 pt-0 pb-4 space-y-1">
+                  <div className="flex items-end">
+                    <p className="text-2xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
+                      Able vs Taxable performance
+                    </p>
+                  </div>
+                  <div className="mt-1 space-y-1 rounded-2xl border border-[color:var(--theme-border)] border-opacity-30 bg-[color:var(--theme-surface)] p-6 shadow-inner">
+                    <div className="max-w-5xl mx-auto w-full">
+                      <div className="grid min-w-[520px] grid-cols-[minmax(260px,420px)_minmax(0,1fr)_minmax(0,1fr)] gap-x-8 items-end pb-3 text-[0.9rem] uppercase tracking-[0.35em] text-[color:var(--theme-muted)] whitespace-nowrap">
+                        <div />
+                        <div className="text-center font-semibold">
+                          ABLE ACCOUNT
+                        </div>
+                        <div className="text-center font-semibold">
+                          TAXABLE ACCOUNT
+                        </div>
                       </div>
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[color:var(--theme-accent)]/80 to-[color:var(--theme-accent)]/30 shadow-lg" />
-                    </div>
-                    <div className="mt-6 space-y-3 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-6 shadow-inner">
-                      <div className="grid grid-cols-[1.6fr_1fr_1fr] gap-4 text-[0.65rem] uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                        <span>Metric</span>
-                        <span className="text-center">Able</span>
-                        <span className="text-center">Taxable</span>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {comparisonRows.map((row, index) => (
+                      <div className="mt-1 space-y-1">
+                        {comparisonRows.slice(0, 5).map((row) => (
                           <div
-                            key={row.label}
-                            className={`grid grid-cols-[1.6fr_1fr_1fr] items-center gap-6 rounded-2xl border border-transparent bg-gradient-to-br from-[color:var(--theme-surface-1)] to-[color:var(--theme-bg)] p-5 text-3xl font-semibold text-[color:var(--theme-fg)] transition hover:-translate-y-0.5 hover:bg-[color:var(--theme-surface)]`}
-                            style={{
-                              boxShadow:
-                                index % 2 === 0
-                                  ? "0 12px 30px rgba(15, 23, 42, 0.08)"
-                                  : "0 12px 30px rgba(15, 23, 42, 0.04)",
-                            }}
+                            key={`shared-${row.label}`}
+                            className="grid grid-cols-[minmax(260px,420px)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8"
                           >
-                            <div className="space-y-1 text-sm uppercase tracking-[0.25em] text-[color:var(--theme-muted)]">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`h-2.5 w-2.5 rounded-full ${
-                                    index % 2 === 0
-                                      ? "bg-[color:var(--theme-accent)]"
-                                      : "bg-[color:var(--theme-muted)]"
-                                  }`}
-                                />
-                                <span>{row.label}</span>
+                            <div className={comparisonLabelClassName}>
+                              {row.label}
+                            </div>
+                            <div className="col-span-2">
+                              <div className={comparisonPillClassName}>
+                                <span className="text-2xl font-semibold tabular-nums text-[color:var(--theme-accent)]">
+                                  {formatCurrencyForComparison(row.able)}
+                                </span>
                               </div>
                             </div>
-                            <div className="text-right text-3xl font-semibold text-[color:var(--theme-accent)]">
-                              {formatCurrencyForComparison(row.able)}
+                          </div>
+                        ))}
+                        {comparisonRows.slice(5).map((row) => (
+                          <div
+                            key={`split-${row.label}`}
+                            className="grid grid-cols-[minmax(260px,420px)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8"
+                          >
+                            <div className={comparisonLabelClassName}>
+                              {row.label}
                             </div>
-                            <div className="text-right text-3xl font-semibold text-[color:var(--theme-fg)]">
-                              {formatCurrencyForComparison(row.taxable)}
+                            <div>
+                              <div className={comparisonPillClassName}>
+                                <span className="text-2xl font-semibold tabular-nums text-[color:var(--theme-accent)]">
+                                  {formatCurrencyForComparison(row.able)}
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <div className={comparisonPillClassName}>
+                                <span className="text-2xl font-semibold tabular-nums text-[color:var(--theme-accent)]">
+                                  {formatCurrencyForComparison(row.taxable)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -4002,8 +4030,8 @@ export default function UiPreviewPage() {
                   </div>
                 </div>
               )}
-              </div>
-            )}
+            </div>
+          )}
 
           </section>
         )}
