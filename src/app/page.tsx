@@ -2,7 +2,9 @@
 
 import { pdf } from "@react-pdf/renderer";
 import ReactECharts from "echarts-for-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { ReportPdf, type ReportPdfProps } from "../pdf";
 import annualContributionLimits from "../data/annualContributionLimits.json";
@@ -101,6 +103,34 @@ const advancedBudgetFields = [
   { key: "other", label: "Other" },
 ] as const;
 type AdvancedBudgetKey = (typeof advancedBudgetFields)[number]["key"];
+
+type PickerPlacement = "above" | "below";
+
+const wheelItemClass = (isActive: boolean) =>
+  `cursor-pointer rounded-lg px-3 py-1 ${
+    isActive
+      ? "bg-[color:var(--theme-accent)] text-white font-semibold"
+      : "text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
+  }`;
+
+const determinePickerPlacement = (
+  buttonRect: DOMRect,
+  pickerHeight: number,
+  viewportHeight: number,
+): PickerPlacement => {
+  const cushion = 16;
+  const availableAbove = buttonRect.top;
+  const availableBelow = viewportHeight - buttonRect.bottom;
+  const canFitAbove = availableAbove >= pickerHeight + cushion;
+  const canFitBelow = availableBelow >= pickerHeight + cushion;
+  if (canFitAbove && !canFitBelow) {
+    return "above";
+  }
+  if (canFitBelow && !canFitAbove) {
+    return "below";
+  }
+  return availableBelow >= availableAbove ? "below" : "above";
+};
 
 function formatCurrencyInput(value: number) {
   const fixed = Number.isFinite(value) ? value.toFixed(2) : "0";
@@ -220,6 +250,8 @@ export default function UiPreviewPage() {
   const [contributionEndYear, setContributionEndYear] = useState(
     new Date().getFullYear().toString(),
   );
+  const [hasTouchedContributionEndDate, setHasTouchedContributionEndDate] =
+    useState(false);
 
   type WorkToAbleDecision = "undecided" | "yes" | "no";
 
@@ -289,11 +321,21 @@ export default function UiPreviewPage() {
   const monthWheelRef = useRef<HTMLDivElement | null>(null);
   const yearWheelRef = useRef<HTMLDivElement | null>(null);
   const monthlyPickerRef = useRef<HTMLDivElement | null>(null);
+  const monthlyPickerButtonRef = useRef<HTMLButtonElement | null>(null);
   const contributionMonthWheelRef = useRef<HTMLDivElement | null>(null);
   const contributionYearWheelRef = useRef<HTMLDivElement | null>(null);
   const contributionPickerRef = useRef<HTMLDivElement | null>(null);
+  const contributionEndTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [monthlyPickerStyle, setMonthlyPickerStyle] = useState<CSSProperties | null>(null);
+  const [contributionPickerStyle, setContributionPickerStyle] = useState<CSSProperties | null>(null);
   const [hasHydrated] = useState(true);
+  const [showEarnedIncomeTooltip, setShowEarnedIncomeTooltip] = useState(false);
+  const earnedIncomeTooltipRef = useRef<HTMLDivElement | null>(null);
+  const earnedIncomeTooltipAnchorRef = useRef<HTMLDivElement | null>(null);
+  const earnedIncomeTooltipBoxRef = useRef<HTMLDivElement | null>(null);
+  const [earnedIncomeTooltipStyle, setEarnedIncomeTooltipStyle] =
+    useState<CSSProperties | null>(null);
 
   const themeVars = useMemo(() => {
     const theme = getThemeForClient(selectedClientId);
@@ -316,20 +358,6 @@ export default function UiPreviewPage() {
     50,
     Math.max(1, Math.round(parseNumber(timeHorizonYears))),
   );
-  const horizonEndDate = useMemo(() => {
-    const months = horizonYears * 12;
-    const end = new Date(currentYear, currentMonthIndex + months - 1);
-    return {
-      month: String(end.getMonth() + 1).padStart(2, "0"),
-      year: end.getFullYear().toString(),
-    };
-  }, [currentYear, currentMonthIndex, horizonYears]);
-  useEffect(() => {
-    setContributionEndMonth(horizonEndDate.month);
-    setContributionEndYear(horizonEndDate.year);
-  }, [horizonEndDate.month, horizonEndDate.year]);
-  const minWithdrawalYear = currentYear;
-  const maxWithdrawalYear = currentYear + horizonYears;
   const beneficiaryUpfrontAmount = parseNumber(beneficiaryUpfrontContribution);
   const beneficiaryRecurringAmount = parseNumber(
     beneficiaryRecurringContribution,
@@ -487,10 +515,6 @@ export default function UiPreviewPage() {
     value: String(index + 1).padStart(2, "0"),
     label,
   }));
-  const monthlyWithdrawalYears = Array.from(
-    { length: Math.max(1, horizonYears + 1) },
-    (_, index) => String(currentYear + index),
-  );
   const monthlyWithdrawalMonthLabel =
     monthlyWithdrawalMonths.find(
       (month) => month.value === monthlyWithdrawalStartMonth,
@@ -499,40 +523,6 @@ export default function UiPreviewPage() {
     monthlyWithdrawalMonths.find(
       (month) => month.value === contributionEndMonth,
     )?.label ?? copy.selectMonthPlaceholder;
-
-  useEffect(() => {
-    const parsed = Number.parseInt(monthlyWithdrawalStartYear, 10);
-    const baseYear = Number.isNaN(parsed) ? currentYear : parsed;
-    const bounded = Math.min(
-      maxWithdrawalYear,
-      Math.max(minWithdrawalYear, baseYear),
-    );
-    if (String(bounded) !== monthlyWithdrawalStartYear) {
-      setMonthlyWithdrawalStartYear(String(bounded));
-    }
-  }, [
-    monthlyWithdrawalStartYear,
-    currentYear,
-    maxWithdrawalYear,
-    minWithdrawalYear,
-  ]);
-
-  useEffect(() => {
-    const parsed = Number.parseInt(contributionEndYear, 10);
-    const baseYear = Number.isNaN(parsed) ? currentYear : parsed;
-    const bounded = Math.min(
-      maxWithdrawalYear,
-      Math.max(minWithdrawalYear, baseYear),
-    );
-    if (String(bounded) !== contributionEndYear) {
-      setContributionEndYear(String(bounded));
-    }
-  }, [
-    contributionEndYear,
-    currentYear,
-    maxWithdrawalYear,
-    minWithdrawalYear,
-  ]);
 
   const [calcData, setCalcData] = useState<CalculationResult | null>(null);
   const [calcError, setCalcError] = useState<string | null>(null);
@@ -877,6 +867,229 @@ export default function UiPreviewPage() {
     taxAwareSchedule.length > 0
       ? taxAwareSchedule[taxAwareSchedule.length - 1].year - startYear + 1
       : 0;
+
+  const scheduleLastYear =
+    totalYearsInSchedule > 0
+      ? startYear + totalYearsInSchedule - 1
+      : startYear + Math.max(1, horizonYears) - 1;
+  const scheduleYears = useMemo(() => {
+    const years: number[] = [];
+    for (let year = startYear; year <= scheduleLastYear; year += 1) {
+      years.push(year);
+    }
+    return years;
+  }, [startYear, scheduleLastYear]);
+  const horizonEndDate = useMemo(() => {
+    if (taxAwareSchedule.length > 0) {
+      const lastRow = taxAwareSchedule[taxAwareSchedule.length - 1];
+      return {
+        month: String(lastRow.month).padStart(2, "0"),
+        year: lastRow.year.toString(),
+      };
+    }
+    const months = horizonYears * 12;
+    const end = new Date(currentYear, currentMonthIndex + months - 1);
+    return {
+      month: String(end.getMonth() + 1).padStart(2, "0"),
+      year: end.getFullYear().toString(),
+    };
+  }, [taxAwareSchedule, currentYear, currentMonthIndex, horizonYears]);
+  useEffect(() => {
+    if (hasTouchedContributionEndDate) {
+      return;
+    }
+    setContributionEndMonth(horizonEndDate.month);
+    setContributionEndYear(horizonEndDate.year);
+  }, [hasTouchedContributionEndDate, horizonEndDate.month, horizonEndDate.year]);
+  const monthlyWithdrawalYears = scheduleYears.map(String);
+  const minWithdrawalYear = scheduleYears[0] ?? startYear;
+  const maxWithdrawalYear = scheduleLastYear;
+  const wheelItemHeight = 40;
+  const wheelPadding = 1;
+  const wheelVisibleItems = 5;
+
+  const monthWheelItems = [
+    ...Array.from({ length: wheelPadding }).map(() => null),
+    ...monthlyWithdrawalMonths,
+    ...Array.from({ length: wheelPadding }).map(() => null),
+  ];
+  const yearWheelItems = [
+    ...Array.from({ length: wheelPadding }).map(() => null),
+    ...monthlyWithdrawalYears,
+    ...Array.from({ length: wheelPadding }).map(() => null),
+  ];
+  const contributionMonthWheelItems = monthWheelItems;
+  const contributionYearWheelItems = yearWheelItems;
+  const snapMonthWheel = (target: HTMLDivElement | null, index: number) => {
+    if (!target) {
+      return;
+    }
+    target.scrollTo({
+      top: index * wheelItemHeight,
+      behavior: "auto",
+    });
+  };
+  const snapYearWheel = (target: HTMLDivElement | null, index: number) => {
+    if (!target) {
+      return;
+    }
+    target.scrollTo({
+      top: index * wheelItemHeight,
+      behavior: "auto",
+    });
+  };
+
+  useEffect(() => {
+    const parsed = Number.parseInt(monthlyWithdrawalStartYear, 10);
+    if (Number.isNaN(parsed)) {
+      return;
+    }
+    const clamped = Math.max(
+      minWithdrawalYear,
+      Math.min(maxWithdrawalYear, parsed),
+    );
+    if (clamped !== parsed) {
+      setMonthlyWithdrawalStartYear(String(clamped));
+    }
+  }, [monthlyWithdrawalStartYear, minWithdrawalYear, maxWithdrawalYear]);
+
+  useEffect(() => {
+    const parsed = Number.parseInt(contributionEndYear, 10);
+    if (Number.isNaN(parsed)) {
+      return;
+    }
+    const clamped = Math.max(
+      minWithdrawalYear,
+      Math.min(maxWithdrawalYear, parsed),
+    );
+    if (clamped !== parsed) {
+      setContributionEndYear(String(clamped));
+    }
+  }, [contributionEndYear, minWithdrawalYear, maxWithdrawalYear]);
+
+  useLayoutEffect(() => {
+    if (!showMonthlyWithdrawalPicker || typeof window === "undefined") {
+      setMonthlyPickerStyle(null);
+      return;
+    }
+    const updatePlacement = () => {
+      if (!monthlyPickerButtonRef.current || !monthlyPickerRef.current) {
+        return;
+      }
+      const buttonRect = monthlyPickerButtonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const fallbackHeight = wheelVisibleItems * wheelItemHeight + 32;
+      const maxAvailableHeight = Math.max(
+        Math.min(26 * 16, viewportHeight - 96),
+        fallbackHeight,
+      );
+      const measuredHeight = monthlyPickerRef.current.offsetHeight;
+      const pickerHeight = Math.min(
+        Math.max(measuredHeight || fallbackHeight, fallbackHeight),
+        maxAvailableHeight,
+      );
+      const placement = determinePickerPlacement(
+        buttonRect,
+        pickerHeight,
+        viewportHeight,
+      );
+      const margin = 8;
+      const rawTop =
+        placement === "below"
+          ? buttonRect.bottom + margin
+          : buttonRect.top - pickerHeight - margin;
+      const clampedTop = Math.max(
+        margin,
+        Math.min(rawTop, viewportHeight - pickerHeight - margin),
+      );
+      const maxWidth = Math.max(viewportWidth - margin * 2, 0);
+      const targetWidth = Math.min(Math.max(buttonRect.width, 0), maxWidth);
+      const rawLeft = Math.min(buttonRect.left, viewportWidth - targetWidth - margin);
+      const clampedLeft = Math.max(margin, rawLeft);
+      setMonthlyPickerStyle({
+        position: "fixed",
+        top: clampedTop,
+        left: clampedLeft,
+        width: targetWidth,
+        zIndex: 1200,
+      });
+    };
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+    };
+  }, [
+    showMonthlyWithdrawalPicker,
+    wheelItemHeight,
+    wheelVisibleItems,
+    monthlyWithdrawalMonths.length,
+    monthlyWithdrawalYears.length,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!showContributionEndPicker || typeof window === "undefined") {
+      setContributionPickerStyle(null);
+      return;
+    }
+    const updatePlacement = () => {
+      if (!contributionEndTriggerRef.current || !contributionPickerRef.current) {
+        return;
+      }
+      const anchorRect = contributionEndTriggerRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const fallbackHeight = wheelVisibleItems * wheelItemHeight + 32;
+      const maxAvailableHeight = Math.max(
+        Math.min(26 * 16, viewportHeight - 96),
+        fallbackHeight,
+      );
+      const measuredHeight = contributionPickerRef.current.offsetHeight;
+      const pickerHeight = Math.min(
+        Math.max(measuredHeight || fallbackHeight, fallbackHeight),
+        maxAvailableHeight,
+      );
+      const gap = 8;
+      const viewportPadding = 12;
+      const beforeClampTop = anchorRect.bottom + gap;
+      const needsFlip =
+        beforeClampTop + pickerHeight > viewportHeight - viewportPadding;
+      const computedTopBeforeClamp = needsFlip
+        ? anchorRect.top - pickerHeight - gap
+        : beforeClampTop;
+      const computedTopAfterClamp = Math.max(
+        viewportPadding,
+        Math.min(
+          computedTopBeforeClamp,
+          viewportHeight - pickerHeight - viewportPadding,
+        ),
+      );
+      const margin = 8;
+      const maxWidth = Math.max(viewportWidth - margin * 2, 0);
+      const targetWidth = Math.min(Math.max(anchorRect.width, 0), maxWidth);
+      const rawLeft = Math.min(anchorRect.left, viewportWidth - targetWidth - margin);
+      const clampedLeft = Math.max(margin, rawLeft);
+      setContributionPickerStyle({
+        position: "fixed",
+        top: computedTopAfterClamp,
+        left: clampedLeft,
+        width: targetWidth,
+        zIndex: 1200,
+      });
+    };
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+    };
+  }, [
+    showContributionEndPicker,
+    wheelItemHeight,
+    wheelVisibleItems,
+    monthlyWithdrawalMonths.length,
+    monthlyWithdrawalYears.length,
+  ]);
 
   const filteredScheduleRows = useMemo(() => {
     if (selectedHorizon === "max") {
@@ -1929,41 +2142,6 @@ const comparisonRows = [
     });
   };
 
-  const wheelItemHeight = 40;
-  const wheelPadding = 2;
-  const wheelVisibleItems = 5;
-
-  const monthWheelItems = [
-    ...Array.from({ length: wheelPadding }).map(() => null),
-    ...monthlyWithdrawalMonths,
-    ...Array.from({ length: wheelPadding }).map(() => null),
-  ];
-  const yearWheelItems = [
-    ...Array.from({ length: wheelPadding }).map(() => null),
-    ...monthlyWithdrawalYears,
-    ...Array.from({ length: wheelPadding }).map(() => null),
-  ];
-  const contributionMonthWheelItems = monthWheelItems;
-  const contributionYearWheelItems = yearWheelItems;
-  const snapMonthWheel = (target: HTMLDivElement | null, index: number) => {
-    if (!target) {
-      return;
-    }
-    target.scrollTo({
-      top: index * wheelItemHeight,
-      behavior: "auto",
-    });
-  };
-  const snapYearWheel = (target: HTMLDivElement | null, index: number) => {
-    if (!target) {
-      return;
-    }
-    target.scrollTo({
-      top: index * wheelItemHeight,
-      behavior: "auto",
-    });
-  };
-
   useEffect(() => {
     if (!showMonthlyWithdrawalPicker) {
       return;
@@ -2071,6 +2249,134 @@ const comparisonRows = [
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [showContributionEndPicker]);
+
+  useEffect(() => {
+    if (!showEarnedIncomeTooltip) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (
+        earnedIncomeTooltipRef.current?.contains(target) ||
+        earnedIncomeTooltipBoxRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowEarnedIncomeTooltip(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [showEarnedIncomeTooltip]);
+
+  const updateEarnedIncomeTooltipPlacement = useCallback(() => {
+    const anchor = earnedIncomeTooltipAnchorRef.current;
+    const tooltip = earnedIncomeTooltipBoxRef.current;
+    if (!anchor || !tooltip) {
+      return;
+    }
+    const anchorRect = anchor.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportPadding = 12;
+    const gap = 8;
+    const desiredWidth = Math.min(520, viewportWidth - 40);
+    tooltip.style.width = `${desiredWidth}px`;
+    const updatedRect = tooltip.getBoundingClientRect();
+    const leftSpace = anchorRect.left - viewportPadding;
+    const rightSpace = viewportWidth - anchorRect.right - viewportPadding;
+    let placement: "left" | "right";
+    let left: number;
+    if (leftSpace >= updatedRect.width + gap) {
+      placement = "left";
+      left = anchorRect.left - updatedRect.width - gap;
+    } else if (rightSpace >= updatedRect.width + gap) {
+      placement = "right";
+      left = anchorRect.right + gap;
+    } else if (leftSpace >= rightSpace) {
+      placement = "left";
+      left = Math.max(viewportPadding, anchorRect.left - updatedRect.width - gap);
+    } else {
+      placement = "right";
+      left = Math.min(
+        viewportWidth - updatedRect.width - viewportPadding,
+        anchorRect.right + gap,
+      );
+    }
+    left = Math.min(
+      Math.max(left, viewportPadding),
+      viewportWidth - updatedRect.width - viewportPadding,
+    );
+    const viewportHeight = window.innerHeight;
+    const top = Math.min(
+      Math.max(
+        anchorRect.top + anchorRect.height / 2 - updatedRect.height / 2,
+        viewportPadding,
+      ),
+      viewportHeight - updatedRect.height - viewportPadding,
+    );
+    const maxHeight = Math.min(0.6 * viewportHeight, viewportHeight - viewportPadding * 2);
+    setEarnedIncomeTooltipStyle({
+      position: "fixed",
+      top,
+      left,
+      width: updatedRect.width,
+      maxHeight,
+      overflowY: "auto",
+      zIndex: 1500,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showEarnedIncomeTooltip) {
+      return;
+    }
+    updateEarnedIncomeTooltipPlacement();
+    window.addEventListener("resize", updateEarnedIncomeTooltipPlacement);
+    return () => {
+      window.removeEventListener("resize", updateEarnedIncomeTooltipPlacement);
+    };
+  }, [showEarnedIncomeTooltip, updateEarnedIncomeTooltipPlacement]);
+
+  useEffect(() => {
+    if (!showEarnedIncomeTooltip) {
+      setEarnedIncomeTooltipStyle(null);
+    }
+  }, [showEarnedIncomeTooltip]);
+
+  const handleEarnedIncomeMouseLeave = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    const related = event.relatedTarget as Node | null;
+    if (
+      related &&
+      (earnedIncomeTooltipAnchorRef.current?.contains(related) ||
+        earnedIncomeTooltipBoxRef.current?.contains(related))
+    ) {
+      return;
+    }
+    setShowEarnedIncomeTooltip(false);
+  };
+
+  const handleEarnedIncomeTooltipMouseLeave = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    const related = event.relatedTarget as Node | null;
+    if (
+      related &&
+      (earnedIncomeTooltipAnchorRef.current?.contains(related) ||
+        earnedIncomeTooltipBoxRef.current?.contains(related))
+    ) {
+      return;
+    }
+    setShowEarnedIncomeTooltip(false);
+  };
 
   useEffect(() => {
     setShowMonthlyWithdrawalPicker(false);
@@ -2360,12 +2666,53 @@ const comparisonRows = [
           {workToAbleHasEarnedIncome && (
             <>
               <div className="mt-3 space-y-3 text-[color:var(--theme-muted)]">
-                <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-                  {copy.tooltips.earnedIncome.prompt}
-                </p>
-                <p className="text-xs leading-relaxed">
-                  {copy.tooltips.earnedIncome.lead}
-                </p>
+                <div
+                  className="flex items-center gap-2 text-sm font-semibold text-[color:var(--theme-fg)]"
+                  ref={earnedIncomeTooltipRef}
+                >
+                  <span>{copy.tooltips.earnedIncome.prompt}</span>
+                  <div
+                    className="relative"
+                    ref={earnedIncomeTooltipAnchorRef}
+                    onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
+                    onMouseLeave={handleEarnedIncomeMouseLeave}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowEarnedIncomeTooltip((prev) => !prev)
+                      }
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)] text-xs font-semibold shadow-sm transition hover:opacity-90"
+                      aria-label={copy.accessibility.estimatedEarnedIncomeInfo}
+                    >
+                      ?
+                    </button>
+                  </div>
+                  {showEarnedIncomeTooltip &&
+                    typeof document !== "undefined" &&
+                    createPortal(
+                      <div
+                        ref={earnedIncomeTooltipBoxRef}
+                        onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
+                        onMouseLeave={handleEarnedIncomeTooltipMouseLeave}
+                        className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3 text-xs leading-relaxed text-[color:var(--theme-fg)] shadow-lg"
+                        style={
+                          earnedIncomeTooltipStyle ?? {
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            width: "min(520px, calc(100vw - 40px))",
+                            maxHeight: "60vh",
+                            overflowY: "auto",
+                            zIndex: 1500,
+                          }
+                        }
+                      >
+                        <p>{copy.tooltips.earnedIncome.lead}</p>
+                      </div>,
+                      document.body,
+                    )}
+                </div>
                 <div className="space-y-1">
                   <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
                     {copy.tooltips.earnedIncome.includedTitle}
@@ -3200,6 +3547,7 @@ const comparisonRows = [
                               <div className="relative">
                                 <button
                                   type="button"
+                                  ref={contributionEndTriggerRef}
                                   onClick={() =>
                                     setShowContributionEndPicker((prev) => !prev)
                                   }
@@ -3223,120 +3571,129 @@ const comparisonRows = [
                                     />
                                   </svg>
                                 </button>
-                                {showContributionEndPicker && (
-                                  <div
-                                    ref={contributionPickerRef}
-                                    className="absolute left-0 right-0 bottom-full z-10 mb-2 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg"
-                                  >
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                      <div className="space-y-2">
-                                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                          {copy.labels.month}
-                                        </p>
-                                        <div className="relative">
-                                          <div
-                                            ref={contributionMonthWheelRef}
-                                            className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                            style={{
-                                              height: wheelVisibleItems * wheelItemHeight,
-                                              scrollSnapType: "y mandatory",
-                                              paddingTop: wheelItemHeight,
-                                              paddingBottom: wheelItemHeight / 2,
-                                            }}
-                                          >
-                                            {contributionMonthWheelItems.map(
-                                              (month, index) => (
-                                                <div
-                                                  key={`contrib-month-${month?.value ?? "pad"}-${index}`}
-                                                  className="flex h-10 items-center justify-center px-2"
-                                                  style={{ scrollSnapAlign: "center" }}
-                                                  onClick={() => {
-                                                    if (!month) {
-                                                      return;
-                                                    }
-                                                    setContributionEndMonth(month.value);
-                                                    snapMonthWheel(
-                                                      contributionMonthWheelRef.current,
-                                                      index,
-                                                    );
-                                                  }}
-                                                >
-                                                  <span
-                                                    className={
-                                                      month?.value === contributionEndMonth
-                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
-                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
-                                                    }
+                                {showContributionEndPicker &&
+                                  typeof document !== "undefined" &&
+                                  createPortal(
+                                    <div
+                                      ref={contributionPickerRef}
+                                      className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
+                                      style={{
+                                        ...(contributionPickerStyle ?? {}),
+                                        ...themeVars,
+                                        backgroundColor: "var(--theme-surface-1)",
+                                        color: "var(--theme-fg)",
+                                        maxHeight: "min(26rem, calc(100vh - 6rem))",
+                                      }}
+                                    >
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.month}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={contributionMonthWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {contributionMonthWheelItems.map(
+                                                (month, index) => (
+                                                  <div
+                                                    key={`contrib-month-${month?.value ?? "pad"}-${index}`}
+                                                    className="flex h-10 items-center justify-center px-2"
+                                                    style={{ scrollSnapAlign: "center" }}
+                                                    onClick={() => {
+                                                      if (!month) {
+                                                        return;
+                                                      }
+                                                      setHasTouchedContributionEndDate(true);
+                                                      setContributionEndMonth(month.value);
+                                                      snapMonthWheel(
+                                                        contributionMonthWheelRef.current,
+                                                        index,
+                                                      );
+                                                    }}
                                                   >
-                                                    {month?.label ?? ""}
-                                                  </span>
-                                                </div>
-                                              ),
-                                            )}
+                                                    <span
+                                                      className={wheelItemClass(
+                                                        month?.value ===
+                                                          contributionEndMonth,
+                                                      )}
+                                                    >
+                                                      {month?.label ?? ""}
+                                                    </span>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.year}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={contributionYearWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {contributionYearWheelItems.map(
+                                                (year, index) => (
+                                                  <div
+                                                    key={`contrib-year-${year ?? "pad"}-${index}`}
+                                                    className="flex h-10 items-center justify-center px-2"
+                                                    style={{ scrollSnapAlign: "center" }}
+                                                    onClick={() => {
+                                                      if (!year) {
+                                                        return;
+                                                      }
+                                                      setHasTouchedContributionEndDate(true);
+                                                      setContributionEndYear(year);
+                                                      snapYearWheel(
+                                                        contributionYearWheelRef.current,
+                                                        index,
+                                                      );
+                                                    }}
+                                                  >
+                                                    <span
+                                                      className={wheelItemClass(
+                                                        year === contributionEndYear,
+                                                      )}
+                                                    >
+                                                      {year ?? ""}
+                                                    </span>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
-                                      <div className="space-y-2">
-                                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                          {copy.labels.year}
-                                        </p>
-                                        <div className="relative">
-                                          <div
-                                            ref={contributionYearWheelRef}
-                                            className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                            style={{
-                                              height: wheelVisibleItems * wheelItemHeight,
-                                              scrollSnapType: "y mandatory",
-                                              paddingTop: wheelItemHeight,
-                                              paddingBottom: wheelItemHeight / 2,
-                                            }}
-                                          >
-                                            {contributionYearWheelItems.map(
-                                              (year, index) => (
-                                                <div
-                                                  key={`contrib-year-${year ?? "pad"}-${index}`}
-                                                  className="flex h-10 items-center justify-center px-2"
-                                                  style={{ scrollSnapAlign: "center" }}
-                                                  onClick={() => {
-                                                    if (!year) {
-                                                      return;
-                                                    }
-                                                    setContributionEndYear(year);
-                                                    snapYearWheel(
-                                                      contributionYearWheelRef.current,
-                                                      index,
-                                                    );
-                                                  }}
-                                                >
-                                                  <span
-                                                    className={
-                                                      year === contributionEndYear
-                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
-                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
-                                                    }
-                                                  >
-                                                    {year ?? ""}
-                                                  </span>
-                                                </div>
-                                              ),
-                                            )}
-                                          </div>
-                                        </div>
+                                      <div className="mt-3 flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setShowContributionEndPicker(false)
+                                          }
+                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
+                                        >
+                                          {copy.buttons.done}
+                                        </button>
                                       </div>
-                                    </div>
-                                    <div className="mt-3 flex justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setShowContributionEndPicker(false)
-                                        }
-                                        className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
-                                      >
-                                        {copy.buttons.done}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
+                                    </div>,
+                                    document.body,
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -3346,8 +3703,8 @@ const comparisonRows = [
                             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
                           {copy.labels.monthlyWithdrawalsTitle}
                             </p>
-                            <div className="grid gap-4 sm:grid-cols-3">
-                              <div className="space-y-2 mt-1.5">
+                            <div className="flex flex-wrap items-end gap-4">
+                              <div className="flex-1 space-y-2">
                                 <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                               {copy.labels.amountShort}
                                 </p>
@@ -3359,13 +3716,14 @@ const comparisonRows = [
                                   }
                                 />
                               </div>
-                              <div className="space-y-2">
+                              <div className="flex-1 space-y-2">
                                 <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
                               {copy.labels.startShort}
                                 </p>
                                 <div className="relative">
                                   <button
                                     type="button"
+                                    ref={monthlyPickerButtonRef}
                                     onClick={() =>
                                       setShowMonthlyWithdrawalPicker((prev) => !prev)
                                     }
@@ -3390,11 +3748,15 @@ const comparisonRows = [
                                       />
                                     </svg>
                                   </button>
-                                  {showMonthlyWithdrawalPicker && (
-                                    <div
-                                      ref={monthlyPickerRef}
-                                      className="absolute left-0 right-0 bottom-full z-10 mb-2 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg"
-                                    >
+                                {showMonthlyWithdrawalPicker && (
+                                  <div
+                                    ref={monthlyPickerRef}
+                                    className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
+                                    style={{
+                                      ...(monthlyPickerStyle ?? {}),
+                                      maxHeight: "min(26rem, calc(100vh - 6rem))",
+                                    }}
+                                  >
                                       <div className="grid gap-3 sm:grid-cols-2">
                                         <div className="space-y-2">
                                           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
@@ -3407,8 +3769,8 @@ const comparisonRows = [
                                               style={{
                                                 height: wheelVisibleItems * wheelItemHeight,
                                                 scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight,
-                                                paddingBottom: wheelItemHeight / 2,
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
                                               }}
                                             >
                                               {monthWheelItems.map((month, index) => (
@@ -3430,12 +3792,10 @@ const comparisonRows = [
                                                   }}
                                                 >
                                                   <span
-                                                    className={
+                                                    className={wheelItemClass(
                                                       month?.value ===
-                                                      monthlyWithdrawalStartMonth
-                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
-                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
-                                                    }
+                                                        monthlyWithdrawalStartMonth,
+                                                    )}
                                                   >
                                                     {month?.label ?? ""}
                                                   </span>
@@ -3455,8 +3815,8 @@ const comparisonRows = [
                                               style={{
                                                 height: wheelVisibleItems * wheelItemHeight,
                                                 scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight,
-                                                paddingBottom: wheelItemHeight / 2,
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
                                               }}
                                             >
                                               {yearWheelItems.map((year, index) => (
@@ -3478,12 +3838,10 @@ const comparisonRows = [
                                                   }}
                                                 >
                                                   <span
-                                                    className={
+                                                    className={wheelItemClass(
                                                       year ===
-                                                      monthlyWithdrawalStartYear
-                                                        ? "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)]"
-                                                        : "cursor-pointer rounded-lg px-3 py-1 text-[color:var(--theme-muted)] hover:bg-[color:var(--theme-surface-1)] hover:font-semibold hover:text-[color:var(--theme-fg)]"
-                                                    }
+                                                        monthlyWithdrawalStartYear,
+                                                    )}
                                                   >
                                                     {year ?? ""}
                                                   </span>
@@ -3508,7 +3866,7 @@ const comparisonRows = [
                                   )}
                                 </div>
                               </div>
-                              <div className="space-y-2">
+                              <div className="flex flex-1 flex-col justify-end space-y-2">
                                 <div className="h-[0.9rem]" />
                                 <button
                                   type="button"
@@ -3516,7 +3874,7 @@ const comparisonRows = [
                                   onClick={() =>
                                     setShowAdvancedBudgetBreakdown((prev) => !prev)
                                   }
-                                  className={`flex h-10 w-full items-center justify-center rounded-full text-[0.65rem] font-bold uppercase tracking-[0.3em] shadow-sm transition ${
+                                  className={`flex h-10 w-full items-center justify-center rounded-full text-[0.95rem] font-bold uppercase tracking-[0.3em] shadow-sm transition ${
                                     showAdvancedBudgetBreakdown
                                       ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
                                       : "bg-[color:var(--theme-muted)] text-white hover:opacity-90"
@@ -3559,13 +3917,23 @@ const comparisonRows = [
                       })}
 
                     {showAdvancedBudgetBreakdown && (
-                      <div className="space-y-3 rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-4">
-                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                          Monthly budget breakdown
-                        </p>
-                        <div className="space-y-3">
+                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                            BUDGET FOR QUALIFIED DISABILITY EXPENSES
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowAdvancedBudgetBreakdown(false)}
+                            className="flex w-8 h-8 min-w-8 min-h-8 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-sm font-semibold text-[color:var(--theme-danger)] transition hover:bg-[color:var(--theme-danger)]/10 box-border p-0 items-center justify-center"
+                            aria-label={copy.misc.close}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="mt-3 space-y-2">
                           {advancedBudgetFields.map((field) => (
-                            <div key={field.key} className="space-y-1">
+                            <div key={field.key} className="space-y-[0.25rem]">
                               <label className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
                                 {field.label}
                               </label>
@@ -3573,7 +3941,7 @@ const comparisonRows = [
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] px-3 text-sm text-[color:var(--theme-fg)]"
+                                className="h-9 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] px-3 text-sm text-[color:var(--theme-fg)]"
                                 value={advancedBudgetValues[field.key]}
                                 onChange={(event) =>
                                   setAdvancedBudgetValues((prev) => ({
