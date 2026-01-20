@@ -774,10 +774,9 @@ export default function UiPreviewPage() {
   const showSsiPrompt = Boolean(isSsiBeneficiary && ssiExceedRow);
   const showPlanMaxStopMessage = Boolean(
     !showSsiPrompt &&
-      planMaxBalance != null &&
-      planMaxStopRow &&
-      planMaxStopLabel &&
-      workToAbleTestCompleted,
+    planMaxBalance != null &&
+    planMaxStopRow &&
+    planMaxStopLabel,
   );
   const workToAbleDeclineActive =
     workToAbleDecision !== "undecided" &&
@@ -1017,7 +1016,6 @@ export default function UiPreviewPage() {
     showPlanMaxStopMessage,
     planMaxBalance,
     planMaxStopRow,
-    workToAbleTestCompleted,
     language,
     pushMessageToTop,
     removeMessageFromOrder,
@@ -2575,7 +2573,7 @@ const comparisonRows = [
 
   return (
     <div
-      className="flex flex-col"
+      className="min-h-screen flex flex-col"
       style={{
         ...themeVars,
         backgroundColor: "var(--theme-bg)",
@@ -3735,7 +3733,7 @@ const comparisonRows = [
                         {copy.report.cards.taxBenefits.note}
                       </p>
                     ) : null}
-                    <div className="mt-0 flex-1 flex flex-col justify-between">
+                    <div className="mt-0 flex-1 flex flex-col justify-start gap-4">
                       {showAnnualReturns ? (
                         rightCardView === "charts" ? (
                           <div className="flex flex-1 flex-col gap-0" style={{ minHeight: 0 }}>
@@ -3756,7 +3754,7 @@ const comparisonRows = [
                                   {percentFormatter.format(averageAnnualReturnTaxable)}
                                 </span>
                               </div>
-                              <div className="flex flex-1 min-w-[9rem] flex-col justify-center gap-3 text-[0.75rem] uppercase tracking-[0.08em] text-[color:var(--theme-muted)]">
+                              <div className="flex flex-1 min-w-[9rem] flex-col justify-start gap-3 text-[0.75rem] uppercase tracking-[0.08em] text-[color:var(--theme-muted)]">
                                 {averageAnnualReturnsStackLegend.map((item) => {
                                   const sign =
                                     item.value > 0

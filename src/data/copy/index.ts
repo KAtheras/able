@@ -212,7 +212,7 @@ export const uiPreviewCopy = {
       monthlyWithdrawalsTitle: "Monthly withdrawals",
       amountShort: "Amount",
       startShort: "Start date",
-      advanced: "Advanced",
+      advanced: "BUDGET",
       ssiBenefitsQuestion:
         "Is the beneficiary receiving or is expected to receive SSI benefits?",
       taxFilingStatus: "Tax filing status",
