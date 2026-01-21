@@ -720,7 +720,7 @@ export default function UiPreviewPage() {
     }
     if (
       isRowAfterContributionEndDate(
-        ssiExceedRow as TaxAwareRow,
+        ssiExceedRow as any,
         contributionEndMonthValue,
         contributionEndYearValue,
       )
@@ -2422,6 +2422,7 @@ const comparisonRows = useMemo(
     const leftSpace = anchorRect.left - viewportPadding;
     const rightSpace = viewportWidth - anchorRect.right - viewportPadding;
     let left: number;
+    let placement: "left" | "right" = "left";
     if (leftSpace >= updatedRect.width + gap) {
       placement = "left";
       left = anchorRect.left - updatedRect.width - gap;
