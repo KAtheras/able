@@ -4061,7 +4061,7 @@ const comparisonRows = useMemo(
                       <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-3">
                         <div className="flex items-start justify-between gap-3">
                           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                            BUDGET FOR QUALIFIED DISABILITY EXPENSES
+                            {copy.misc.budgetQualifiedHeader}
                           </p>
                           <button
                             type="button"
@@ -4118,7 +4118,7 @@ const comparisonRows = useMemo(
                   <div className="flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-4 pt-3">
                       <div className="flex min-h-[2.5rem] items-center justify-between gap-2">
                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                          Account Activity Information
+                          {copy.misc.accountActivityInformation}
                         </p>
                       </div>
                       <div className="mt-0 grid gap-2 sm:grid-cols-2">
@@ -4364,7 +4364,7 @@ const comparisonRows = useMemo(
                               }}
                             >
                               <p className="text-[0.55rem] uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                Total Tax Benefits
+                                {copy.report.taxBenefits.totalLabel}
                               </p>
                               <p className="mt-1 text-xl font-semibold text-[color:var(--theme-accent)]">
                                 {currencyFormatterWhole.format(
@@ -4455,7 +4455,7 @@ const comparisonRows = useMemo(
                                 )}
                               </p>
                               <p className="mt-2 text-xs text-[color:var(--theme-muted)]">
-                                Total tax benefits
+                                {copy.report.taxBenefits.totalCaption}
                               </p>
                             </div>
                           ) : null}
