@@ -47,6 +47,36 @@ function clampMonth(month: number) {
   return Math.min(12, Math.max(1, month));
 }
 
+function isRecurringContributionDue(
+  cadence: "monthly" | "annual",
+  monthIndex: number,
+) {
+  if (cadence === "monthly") {
+    return true;
+  }
+  if (cadence === "annual") {
+    return monthIndex % 12 === 0;
+  }
+  return false;
+}
+
+function isRowAfterContributionEndDate(
+  row: { month: number; year: number },
+  endMonth?: number | null,
+  endYear?: number | null,
+) {
+  if (endMonth == null || endYear == null) {
+    return false;
+  }
+  if (row.year > endYear) {
+    return true;
+  }
+  if (row.year === endYear && row.month > endMonth) {
+    return true;
+  }
+  return false;
+}
+
 function getAnnualContributionLimit(year: number) {
   const entry = (annualContributionLimits as { year: number; limit: number }[]).find(
     (item) => item.year === year,
@@ -668,6 +698,47 @@ export default function UiPreviewPage() {
   const fscCreditRate = calcData?.fscCreditRate ?? 0;
   const fscEligibleForCredit = calcData?.fscEligibleForCredit ?? false;
 
+  const parsedContributionEndMonth = Number.parseInt(contributionEndMonth, 10);
+  const parsedContributionEndYear = Number.parseInt(contributionEndYear, 10);
+  const contributionEndMonthValue = Number.isFinite(parsedContributionEndMonth)
+    ? parsedContributionEndMonth
+    : null;
+  const contributionEndYearValue = Number.isFinite(parsedContributionEndYear)
+    ? parsedContributionEndYear
+    : null;
+  const ssiContributionsActiveAtCrossing = useMemo(() => {
+    if (!ssiExceedRow) {
+      return false;
+    }
+    const recurringAmount = parseNumber(beneficiaryRecurringContribution);
+    const upfrontAmount = parseNumber(beneficiaryUpfrontContribution);
+    if (ssiExceedRow.monthIndex === 0 && upfrontAmount > 0) {
+      return true;
+    }
+    if (recurringAmount <= 0) {
+      return false;
+    }
+    if (
+      isRowAfterContributionEndDate(
+        ssiExceedRow as TaxAwareRow,
+        contributionEndMonthValue,
+        contributionEndYearValue,
+      )
+    ) {
+      return false;
+    }
+    return isRecurringContributionDue(
+      beneficiaryRecurringCadence,
+      ssiExceedRow.monthIndex,
+    );
+  }, [
+    ssiExceedRow,
+    beneficiaryRecurringContribution,
+    beneficiaryRecurringCadence,
+    beneficiaryUpfrontContribution,
+    contributionEndMonthValue,
+    contributionEndYearValue,
+  ]);
   const fscResultMessage = (() => {
     if (fscDisqualifyingMessage) {
       return fscDisqualifyingMessage;
@@ -762,11 +833,60 @@ export default function UiPreviewPage() {
     ? `${copy.monthNamesLong[ssiExceedRow.month - 1]} ${ssiExceedRow.year}`
     : null;
   const showSsiPrompt = Boolean(isSsiBeneficiary && ssiExceedRow);
+  const planMaxContributionClamped = useMemo(() => {
+    if (!planMaxBalance || !planMaxStopRow) {
+      return false;
+    }
+    const upfrontAmount = parseNumber(beneficiaryUpfrontContribution);
+    const recurringAmount = parseNumber(beneficiaryRecurringContribution);
+    const cadence = beneficiaryRecurringCadence;
+    let upfrontApplied = false;
+    let breachIndex = -1;
+    let plannedAfterBreach = false;
+    let clampedAfterBreach = false;
+    for (let index = 0; index < taxAwareSchedule.length; index += 1) {
+      const row = taxAwareSchedule[index];
+      const plannedUpfront =
+        !upfrontApplied && row.monthIndex === 0 ? upfrontAmount : 0;
+      if (row.monthIndex === 0 && !upfrontApplied) {
+        upfrontApplied = true;
+      }
+      const plannedRecurring =
+        recurringAmount > 0 && isRecurringContributionDue(cadence, row.monthIndex)
+          ? recurringAmount
+          : 0;
+      const plannedTotal = plannedUpfront + plannedRecurring;
+      if (row.planMaxStop && breachIndex === -1) {
+        breachIndex = index;
+      }
+      if (breachIndex === -1) {
+        continue;
+      }
+      if (plannedTotal > 0) {
+        plannedAfterBreach = true;
+        if (row.contributions < plannedTotal) {
+          clampedAfterBreach = true;
+        }
+      }
+      if (plannedAfterBreach && clampedAfterBreach) {
+        break;
+      }
+    }
+    return plannedAfterBreach && clampedAfterBreach;
+  }, [
+    taxAwareSchedule,
+    beneficiaryUpfrontContribution,
+    beneficiaryRecurringContribution,
+    beneficiaryRecurringCadence,
+    planMaxBalance,
+    planMaxStopRow,
+  ]);
   const showPlanMaxStopMessage = Boolean(
     !showSsiPrompt &&
     planMaxBalance != null &&
     planMaxStopRow &&
-    planMaxStopLabel,
+    planMaxStopLabel &&
+    planMaxContributionClamped,
   );
   const workToAbleDeclineActive =
     workToAbleDecision !== "undecided" &&
@@ -1379,56 +1499,66 @@ export default function UiPreviewPage() {
     pushMessageToTop,
     removeMessageFromOrder,
   ]);
-  const taxableTaxAmount =
-    filteredMonthlyTotals.federalTax + filteredMonthlyTotals.stateTax;
-  const taxableEndingAfterTaxes = reportTotals.endingBalance - taxableTaxAmount;
-  const taxableTotalEconomicValue =
-    reportTotals.totalEarnings - taxableTaxAmount;
+const taxableTaxAmount =
+  filteredMonthlyTotals.federalTax + filteredMonthlyTotals.stateTax;
+const taxableEndingAfterTaxes = reportTotals.endingBalance - taxableTaxAmount;
+const taxableTotalEconomicValue =
+  reportTotals.totalEarnings - taxableTaxAmount;
 const ableTaxSavings =
   Math.abs(filteredMonthlyTotals.federalSaversCredit) +
   Math.abs(filteredMonthlyTotals.stateDeductionCredit);
-const comparisonRows = [
-  {
-    label: "Starting balance",
-    able: reportTotals.startingBalance,
-    taxable: reportTotals.startingBalance,
-  },
-  {
-    label: "Contributions",
-    able: reportTotals.totalContributions,
-    taxable: reportTotals.totalContributions,
-  },
-  {
-    label: "Withdrawals",
-    able: -reportTotals.totalWithdrawals,
-    taxable: -reportTotals.totalWithdrawals,
-  },
+const comparisonRows = useMemo(
+  () => [
     {
-      label: "Investment returns",
+      label: copy.ableVsTaxable.startingBalance,
+      able: reportTotals.startingBalance,
+      taxable: reportTotals.startingBalance,
+    },
+    {
+      label: copy.ableVsTaxable.contributions,
+      able: reportTotals.totalContributions,
+      taxable: reportTotals.totalContributions,
+    },
+    {
+      label: copy.ableVsTaxable.withdrawals,
+      able: -reportTotals.totalWithdrawals,
+      taxable: -reportTotals.totalWithdrawals,
+    },
+    {
+      label: copy.ableVsTaxable.investmentReturns,
       able: reportTotals.totalEarnings,
       taxable: reportTotals.totalEarnings,
     },
     {
-      label: "Account ending balance",
+      label: copy.ableVsTaxable.accountEndingBalance,
       able: reportTotals.endingBalance,
       taxable: reportTotals.endingBalance,
-  },
-  {
-    label: "Taxes",
-    able: ableTaxSavings,
-    taxable: -taxableTaxAmount,
-  },
+    },
     {
-      label: "Ending value after taxes",
+      label: copy.ableVsTaxable.taxes,
+      able: ableTaxSavings,
+      taxable: -taxableTaxAmount,
+    },
+    {
+      label: copy.ableVsTaxable.endingValueAfterTaxes,
       able: reportTotals.endingBalance + ableTaxSavings,
       taxable: taxableEndingAfterTaxes,
     },
     {
-      label: "Total economic value created",
+      label: copy.ableVsTaxable.totalEconomicValueCreated,
       able: reportTotals.totalEarnings + ableTaxSavings,
       taxable: taxableTotalEconomicValue,
-  },
-];
+    },
+  ],
+  [
+    copy,
+    reportTotals,
+    ableTaxSavings,
+    taxableTaxAmount,
+    taxableEndingAfterTaxes,
+    taxableTotalEconomicValue,
+  ],
+);
   const comparisonLabelClassName =
     "text-[0.9rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] opacity-80";
   const comparisonPillClassName =
@@ -2291,7 +2421,6 @@ const comparisonRows = [
     const updatedRect = tooltip.getBoundingClientRect();
     const leftSpace = anchorRect.left - viewportPadding;
     const rightSpace = viewportWidth - anchorRect.right - viewportPadding;
-    let placement: "left" | "right";
     let left: number;
     if (leftSpace >= updatedRect.width + gap) {
       placement = "left";
@@ -2486,10 +2615,21 @@ const comparisonRows = [
           financial impact.
         </p>
         <p>
-          Accordingly, in this planning tool, contributions are stopped in{" "}
-          {ssiExceedLabel}. Recurring withdrawals are also initiated to keep
-          the balance at {currencyFormatter.format(ssiBalanceLimit)} by
-          withdrawing the projected monthly earnings.
+          Accordingly,{" "}
+          {ssiContributionsActiveAtCrossing ? (
+            <>
+              in this planning tool, contributions are stopped in{" "}
+              {ssiExceedLabel}. Recurring withdrawals are also initiated to keep
+              the balance at {currencyFormatter.format(ssiBalanceLimit)} by
+              withdrawing the projected monthly earnings.
+            </>
+          ) : (
+            <>
+              recurring withdrawals are initiated in {ssiExceedLabel} to keep
+              the balance at {currencyFormatter.format(ssiBalanceLimit)} by
+              withdrawing the projected monthly earnings.
+            </>
+          )}
         </p>
       </div>
     ) : null,
@@ -4328,7 +4468,7 @@ const comparisonRows = [
                 <div className="px-6 pt-0 pb-4 space-y-1">
                   <div className="flex items-end">
                     <p className="text-2xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
-                      Able vs Taxable performance
+                      {copy.ableVsTaxable.title}
                     </p>
                   </div>
                   <div className="mt-1 space-y-1 rounded-2xl border border-[color:var(--theme-border)] border-opacity-30 bg-[color:var(--theme-surface)] p-6 shadow-inner">
@@ -4336,10 +4476,10 @@ const comparisonRows = [
                       <div className="grid min-w-[520px] grid-cols-[minmax(260px,420px)_minmax(0,1fr)_minmax(0,1fr)] gap-x-8 items-end pb-3 text-[0.9rem] uppercase tracking-[0.35em] text-[color:var(--theme-muted)] whitespace-nowrap">
                         <div />
                         <div className="text-center font-semibold">
-                          ABLE ACCOUNT
+                          {copy.ableVsTaxable.ableAccount}
                         </div>
                         <div className="text-center font-semibold">
-                          TAXABLE ACCOUNT
+                          {copy.ableVsTaxable.taxableAccount}
                         </div>
                       </div>
                       <div className="mt-1 space-y-1">

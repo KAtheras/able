@@ -1,0 +1,24 @@
+2536:M7 4l6 6-6 6
+2555:M7 8V4h10v4M7 17h10v3H7v-3ZM5 9h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2Z
+2575:M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6
+2609:Based on your planned contributions, withdrawals and earnings assumptions the account is projected to exceed
+2614:This may result in suspension of SSI benefits and have an adverse financial impact.
+2618:Accordingly,
+2621:in this planning tool, contributions are stopped in
+2622:. Recurring withdrawals are also initiated to keep the balance at
+2623:by withdrawing the projected monthly earnings.
+2628:recurring withdrawals are initiated in
+2628:to keep the balance at
+2629:by withdrawing the projected monthly earnings.
+3033:Based on all your inputs, your account balance reaches zero in
+3037:years before the end of your time horizon. You can modify your inputs—including time horizon, contributions, withdrawals, and when those streams begin or end—if you’d like to plan differently.
+3047:Projected ending balance
+3050:Based on your inputs, your account is projected to have an ending balance of
+3176:M4 12h12M10 5v7l3-3M10 12l-3-3
+3342:M13 4l-6 6 6 6
+3705:M6 9l6 6 6-6
+3882:M6 9l6 6 6-6
+4063:BUDGET FOR QUALIFIED DISABILITY EXPENSES
+4120:Account Activity Information
+4366:Total Tax Benefits
+4457:Total tax benefits

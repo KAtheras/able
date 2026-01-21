@@ -161,13 +161,13 @@ export const uiPreviewCopy = {
           subtitle: "Net contributions and ending balance over time.",
           legendContributions: "Net contributions",
           legendEarnings: "Ending balance",
-        },
       },
-      taxBenefits: {
-        tooltip: "Tax benefits details.",
-        infoLabel: "Tax benefits info",
-        returnImpactLabel: "Adjusted able account return",
-        chartDescription:
+    },
+    taxBenefits: {
+      tooltip: "Tax benefits details.",
+      infoLabel: "Tax benefits info",
+      returnImpactLabel: "Adjusted able account return",
+      chartDescription:
           "Tax benefits breakdown with amounts listed by category below.",
         waterfallLabels: {
           ableBase: "ABLE account",
@@ -395,6 +395,19 @@ export const uiPreviewCopy = {
           "Social Security benefits (including SSI, SSDI)",
         ],
       },
+    },
+    ableVsTaxable: {
+      title: "Able vs Taxable performance",
+      ableAccount: "ABLE account",
+      taxableAccount: "Taxable account",
+      startingBalance: "Starting balance",
+      contributions: "Contributions",
+      withdrawals: "Withdrawals",
+      investmentReturns: "Investment returns",
+      accountEndingBalance: "Account ending balance",
+      taxes: "Taxes",
+      endingValueAfterTaxes: "Ending value after taxes",
+      totalEconomicValueCreated: "Total economic value created",
     },
   },
   es: {
@@ -794,6 +807,19 @@ export const uiPreviewCopy = {
           "Beneficios del Seguro Social (incluye SSI, SSDI)",
         ],
       },
+    },
+    ableVsTaxable: {
+      title: "Desempeño Able vs Imponible",
+      ableAccount: "Cuenta ABLE",
+      taxableAccount: "Cuenta imponible",
+      startingBalance: "Saldo inicial",
+      contributions: "Contribuciones",
+      withdrawals: "Retiros",
+      investmentReturns: "Rendimientos de inversión",
+      accountEndingBalance: "Saldo final de la cuenta",
+      taxes: "Impuestos",
+      endingValueAfterTaxes: "Valor final después de impuestos",
+      totalEconomicValueCreated: "Valor económico total generado",
     },
   },
 } as const;
