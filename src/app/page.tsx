@@ -653,10 +653,20 @@ export default function UiPreviewPage() {
     contributionEndYear,
   ]);
 
+  const calcRequestControllerRef = useRef<AbortController | null>(null);
+  const calcRequestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    let isActive = true;
+    if (calcRequestTimeoutRef.current) {
+      clearTimeout(calcRequestTimeoutRef.current);
+    }
+    if (calcRequestControllerRef.current) {
+      calcRequestControllerRef.current.abort();
+    }
+
     const controller = new AbortController();
-    const runCalculation = async () => {
+    calcRequestControllerRef.current = controller;
+    calcRequestTimeoutRef.current = setTimeout(async () => {
       try {
         setCalcError(null);
         const response = await fetch("/api/calculate", {
@@ -672,22 +682,22 @@ export default function UiPreviewPage() {
           );
         }
         const payload = (await response.json()) as CalculationResult;
-        if (isActive) {
-          setCalcData(payload);
-        }
+        setCalcData(payload);
       } catch (error) {
-        if (!controller.signal.aborted && isActive) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Unable to calculate results.";
-          setCalcError(message);
+        if (controller.signal.aborted) {
+          return;
         }
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to calculate results.";
+        setCalcError(message);
       }
-    };
-    runCalculation();
+    }, 900);
     return () => {
-      isActive = false;
+      if (calcRequestTimeoutRef.current) {
+        clearTimeout(calcRequestTimeoutRef.current);
+      }
       controller.abort();
     };
   }, [calcInput]);
@@ -2785,9 +2795,53 @@ const comparisonRows = useMemo(
           {copy.workToAble.title}
         </p>
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
-            {copy.workToAble.earnedIncomeQuestion}
-          </p>
+          <div
+            className="flex items-center gap-2 text-sm font-semibold text-[color:var(--theme-fg)]"
+            ref={earnedIncomeTooltipRef}
+          >
+            <span>{copy.workToAble.earnedIncomeQuestion}</span>
+            <div
+              className="relative"
+              ref={earnedIncomeTooltipAnchorRef}
+              onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
+              onMouseLeave={handleEarnedIncomeMouseLeave}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setShowEarnedIncomeTooltip((prev) => !prev)
+                }
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)] text-xs font-semibold shadow-sm transition hover:opacity-90"
+                aria-label={copy.accessibility.estimatedEarnedIncomeInfo}
+              >
+                ?
+              </button>
+            </div>
+            {showEarnedIncomeTooltip &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div
+                  ref={earnedIncomeTooltipBoxRef}
+                  onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
+                  onMouseLeave={handleEarnedIncomeTooltipMouseLeave}
+                  className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3 text-xs leading-relaxed text-[color:var(--theme-fg)] shadow-lg"
+                  style={
+                    earnedIncomeTooltipStyle ?? {
+                      position: "fixed",
+                      top: 0,
+                      left: 0,
+                      width: "min(520px, calc(100vw - 40px))",
+                      maxHeight: "60vh",
+                      overflowY: "auto",
+                      zIndex: 1500,
+                    }
+                  }
+                >
+                  <p>{copy.tooltips.earnedIncome.lead}</p>
+                </div>,
+                document.body,
+              )}
+          </div>
           <div className="flex gap-2">
             {[true, false].map((value) => (
               <button
@@ -2807,53 +2861,9 @@ const comparisonRows = useMemo(
           {workToAbleHasEarnedIncome && (
             <>
               <div className="mt-3 space-y-3 text-[color:var(--theme-muted)]">
-                <div
-                  className="flex items-center gap-2 text-sm font-semibold text-[color:var(--theme-fg)]"
-                  ref={earnedIncomeTooltipRef}
-                >
-                  <span>{copy.tooltips.earnedIncome.prompt}</span>
-                  <div
-                    className="relative"
-                    ref={earnedIncomeTooltipAnchorRef}
-                    onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
-                    onMouseLeave={handleEarnedIncomeMouseLeave}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowEarnedIncomeTooltip((prev) => !prev)
-                      }
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)] text-xs font-semibold shadow-sm transition hover:opacity-90"
-                      aria-label={copy.accessibility.estimatedEarnedIncomeInfo}
-                    >
-                      ?
-                    </button>
-                  </div>
-                  {showEarnedIncomeTooltip &&
-                    typeof document !== "undefined" &&
-                    createPortal(
-                      <div
-                        ref={earnedIncomeTooltipBoxRef}
-                        onMouseEnter={() => setShowEarnedIncomeTooltip(true)}
-                        onMouseLeave={handleEarnedIncomeTooltipMouseLeave}
-                        className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3 text-xs leading-relaxed text-[color:var(--theme-fg)] shadow-lg"
-                        style={
-                          earnedIncomeTooltipStyle ?? {
-                            position: "fixed",
-                            top: 0,
-                            left: 0,
-                            width: "min(520px, calc(100vw - 40px))",
-                            maxHeight: "60vh",
-                            overflowY: "auto",
-                            zIndex: 1500,
-                          }
-                        }
-                      >
-                        <p>{copy.tooltips.earnedIncome.lead}</p>
-                      </div>,
-                      document.body,
-                    )}
-                </div>
+                <p className="text-sm font-semibold text-[color:var(--theme-fg)]">
+                  {copy.tooltips.earnedIncome.prompt}
+                </p>
                 <div className="space-y-1">
                   <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
                     {copy.tooltips.earnedIncome.includedTitle}
