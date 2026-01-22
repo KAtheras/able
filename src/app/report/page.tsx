@@ -126,7 +126,7 @@ function classNames(...parts: Array<string | false | null | undefined>) {
 export default function ReportShellPage() {
   const tabs: ReportTab[] = useMemo(
     () => [
-      { id: "overview", label: "Overview", icon: <IconDoc /> },
+      { id: "overview", label: "Inputs", icon: <IconDoc /> },
       { id: "summary", label: "Summary", icon: <IconBars /> },
       { id: "charts", label: "Charts", icon: <IconChart /> },
       { id: "table", label: "Table", icon: <IconTable /> },
@@ -186,7 +186,7 @@ export default function ReportShellPage() {
             </div>
           </div>
         </header>
-        <div className="grid min-h-[calc(100vh-2rem)] grid-cols-1 gap-4 mt-4 md:grid-cols-[18rem_1fr]">
+        <div className="grid min-h-[calc(100vh-2rem)] grid-cols-1 gap-4 mt-4 md:grid-cols-[10.95rem_1fr]">
           {/* Left rail (desktop) */}
           <aside className="hidden md:flex flex-col rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
             <div className="px-5 pt-5 pb-3">
@@ -201,90 +201,45 @@ export default function ReportShellPage() {
               </p>
             </div>
 
-            <nav className="flex flex-col gap-2 px-3 pb-4">
+      <nav className="flex flex-col gap-2 px-3 pb-4">
               {tabs.map((t) => {
                 const isActive = t.id === activeTab;
                 return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTab(t.id)}
-                    className={classNames(
-                      "group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                      isActive
-                        ? "border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                        : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)] hover:bg-[color:var(--theme-surface-1)]",
-                    )}
-                    aria-current={isActive ? "page" : undefined}
-                  >
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            className={classNames(
+              "group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
+              "min-h-[5rem]",
+              isActive
+                ? "border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)] hover:bg-[color:var(--theme-surface-1)]",
+            )}
+            aria-current={isActive ? "page" : undefined}
+          >
                     <span
                       className={classNames(
-                        "inline-flex h-10 w-10 items-center justify-center rounded-2xl border",
+                        "inline-flex h-10 w-10 items-center justify-center rounded-2xl",
                         isActive
-                          ? "border-transparent bg-white/15"
-                          : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)]",
+                          ? "bg-white/15"
+                          : "bg-[color:var(--theme-surface-1)]",
                       )}
                     >
                       <span className="text-current">{t.icon}</span>
                     </span>
                     <span className="flex min-w-0 flex-col">
                       <span className="text-sm font-semibold">{t.label}</span>
-                      <span
-                        className={classNames(
-                          "text-xs",
-                          isActive
-                            ? "text-[color:var(--theme-accent-text)]/80"
-                            : "text-[color:var(--theme-muted)]",
-                        )}
-                      >
-                        {t.id === "overview"
-                          ? "Full planner view"
-                          : "Placeholder (coming soon)"}
-                      </span>
                     </span>
                   </button>
                 );
               })}
             </nav>
 
-            <div className="mt-auto px-5 pb-5">
-              <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-4 text-xs text-[color:var(--theme-muted)]">
-                For now, only <span className="font-semibold">Overview</span>{" "}
-                is wired. The other tabs will become real report pages later.
-              </div>
-            </div>
           </aside>
 
           {/* Main panel */}
           <main className="min-h-0 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
-            {/* Top mini header (mobile + desktop) */}
-            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--theme-border)] px-5 py-4">
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                  Report
-                </p>
-                <p className="mt-1 truncate text-lg font-semibold">
-                  {tabs.find((t) => t.id === activeTab)?.label ?? "Overview"}
-                </p>
-              </div>
-
-              {/* Small tab switcher on mobile */}
-              <div className="flex md:hidden">
-                <select
-                  className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]"
-                  value={activeTab}
-                  onChange={(e) => setActiveTab(e.target.value as ReportTabId)}
-                  aria-label="Select report section"
-                >
-                  {tabs.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
             <div className="min-h-0">
               {activeTab === "overview" ? (
                 // This is the key: the existing planner page renders here
