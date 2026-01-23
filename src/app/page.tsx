@@ -353,6 +353,631 @@ export default function UiPreviewPage() {
       </div>
     </div>
   );
+
+  const renderInputsStep0 = () => (
+                <div className="flex min-h-0 flex-1 flex-col gap-6 h-full">
+                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr] h-full items-stretch">
+                    <div className="flex min-h-0 flex-1 flex-col h-full">
+                      <div className="flex h-full flex-col gap-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-5 shadow-lg">
+                        <div className="flex flex-1 flex-col gap-4">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="grid gap-3 md:grid-cols-2 md:items-center">
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.beneficiary}
+                                  </p>
+                                  <input
+                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={beneficiaryName}
+                                    onChange={(event) =>
+                                      setBeneficiaryName(event.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.stateOfResidence}
+                                  </p>
+                                  <select
+                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={stateCode}
+                                    onChange={(event) =>
+                                      setStateCode(event.target.value)
+                                    }
+                                  >
+                                    {availableStateCodes.map((code) => (
+                                      <option key={code} value={code}>
+                                        {code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="grid gap-3 grid-cols-2">
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.taxFilingStatus}
+                                  </p>
+                                  <select
+                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={filingStatus}
+                                    onChange={(event) =>
+                                      setFilingStatus(event.target.value)
+                                    }
+                                  >
+                                    {filingStatusOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                    {copy.labels.adjustedGrossIncome}
+                                  </p>
+                                  <input
+                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                    value={accountAGI}
+                                    onChange={(event) =>
+                                      setAccountAGI(event.target.value)
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <div className="space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                  {copy.labels.annualReturnAssumption}
+                                </p>
+                                <input
+                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                  value={annualReturnOverride}
+                                  onChange={(event) =>
+                                    setAnnualReturnOverride(event.target.value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                              <label className="flex items-center gap-3 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                <input
+                                  id="beneficiary-ssi-benefits"
+                                  type="checkbox"
+                                  checked={isSsiBeneficiary}
+                                  onChange={(event) =>
+                                    setIsSsiBeneficiary(event.target.checked)
+                                  }
+                                  className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100 square-checkbox"
+                                />
+                                <span>{copy.labels.ssiBenefitsQuestion}</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)]">
+                      {residencyWarningMessage && (
+                        <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
+                          <span>{residencyWarningMessage}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (planStateCode) {
+                                setStateCode(planStateCode);
+                              }
+                              setResidencyOverride(true);
+                            }}
+                            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                          >
+                            {copy.residency.actionLabel}
+                          </button>
+                        </div>
+                      )}
+                      <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                        {copy.misc.disclosureCards.demographics.map(
+                          (paragraph, index) => (
+                            <p key={`demographics-${index}`}>{paragraph}</p>
+                          ),
+                        )}
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+  );
+
+  const renderInputsStep1 = () => (
+                <div className="flex min-h-0 flex-1 flex-col gap-4 h-full">
+                  <div className="grid min-h-0 gap-4 items-stretch lg:grid-cols-[1.25fr_0.73fr] h-full">
+                    <div className="flex min-h-0 flex-1 flex-col h-full">
+                      <div className="flex h-full flex-col rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
+                        <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {timeHorizonLabel}
+                            </p>
+                            <input
+                              className="h-10 min-w-[5rem] w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              type="number"
+                              min={1}
+                              max={50}
+                              step={1}
+                              value={timeHorizonYears}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+                                if (rawValue === "") {
+                                  setTimeHorizonYears(rawValue);
+                                  return;
+                                }
+                                const parsedValue = Number(rawValue);
+                                if (!Number.isFinite(parsedValue)) {
+                                  setTimeHorizonYears(rawValue);
+                                  return;
+                                }
+                                const clampedValue = Math.min(
+                                  50,
+                                  Math.max(1, Math.round(parsedValue)),
+                                );
+                                setTimeHorizonYears(String(clampedValue));
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.startingBalance}
+                            </p>
+                            <input
+                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              value={startingBalance}
+                              onChange={(event) =>
+                                setStartingBalance(event.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.upfrontContribution}
+                            </p>
+                            <input
+                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                              value={beneficiaryUpfrontContribution}
+                              onChange={(event) =>
+                                setBeneficiaryUpfrontContribution(event.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                            {copy.labels.contributionsParent}
+                          </p>
+                          <div className="grid gap-4 sm:grid-cols-3 items-end">
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.recurringContribution}
+                              </p>
+                              <input
+                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={beneficiaryRecurringContribution}
+                                onChange={(event) =>
+                                  setBeneficiaryRecurringContribution(event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.contributionCadence}
+                              </p>
+                              <select
+                                className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                value={beneficiaryRecurringCadence}
+                                onChange={(event) =>
+                                  setBeneficiaryRecurringCadence(
+                                    event.target.value as (typeof cadenceOptions)[number],
+                                  )
+                                }
+                              >
+                                {cadenceOptions.map((cadence) => (
+                                  <option key={cadence} value={cadence}>
+                                    {copy.cadenceLabels[cadence]}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                                {copy.labels.contributionEndDate}
+                              </p>
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  ref={contributionEndTriggerRef}
+                                  onClick={() =>
+                                    setShowContributionEndPicker((prev) => !prev)
+                                  }
+                                  className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
+                                >
+                                  <span>
+                                    {contributionEndMonthLabel} {contributionEndYear}
+                                  </span>
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 text-[color:var(--theme-muted)]"
+                                  >
+                                    <path
+                                      d="M6 9l6 6 6-6"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                                {showContributionEndPicker &&
+                                  typeof document !== "undefined" &&
+                                  createPortal(
+                                    <div
+                                      ref={contributionPickerRef}
+                                      className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
+                                      style={{
+                                        ...(contributionPickerStyle ?? {}),
+                                        ...themeVars,
+                                        backgroundColor: "var(--theme-surface-1)",
+                                        color: "var(--theme-fg)",
+                                        maxHeight: "min(26rem, calc(100vh - 6rem))",
+                                      }}
+                                    >
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.month}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={contributionMonthWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {contributionMonthWheelItems.map(
+                                                (month, index) => (
+                                                  <div
+                                                    key={`contrib-month-${month?.value ?? "pad"}-${index}`}
+                                                    className="flex h-10 items-center justify-center px-2"
+                                                    style={{ scrollSnapAlign: "center" }}
+                                                    onClick={() => {
+                                                      if (!month) {
+                                                        return;
+                                                      }
+                                                      setHasTouchedContributionEndDate(true);
+                                                      setContributionEndMonth(month.value);
+                                                      snapMonthWheel(
+                                                        contributionMonthWheelRef.current,
+                                                        index,
+                                                      );
+                                                    }}
+                                                  >
+                                                    <span
+                                                      className={wheelItemClass(
+                                                        month?.value ===
+                                                          contributionEndMonth,
+                                                      )}
+                                                    >
+                                                      {month?.label ?? ""}
+                                                    </span>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.year}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={contributionYearWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {contributionYearWheelItems.map(
+                                                (year, index) => (
+                                                  <div
+                                                    key={`contrib-year-${year ?? "pad"}-${index}`}
+                                                    className="flex h-10 items-center justify-center px-2"
+                                                    style={{ scrollSnapAlign: "center" }}
+                                                    onClick={() => {
+                                                      if (!year) {
+                                                        return;
+                                                      }
+                                                      setHasTouchedContributionEndDate(true);
+                                                      setContributionEndYear(year);
+                                                      snapYearWheel(
+                                                        contributionYearWheelRef.current,
+                                                        index,
+                                                      );
+                                                    }}
+                                                  >
+                                                    <span
+                                                      className={wheelItemClass(
+                                                        year === contributionEndYear,
+                                                      )}
+                                                    >
+                                                      {year ?? ""}
+                                                    </span>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setShowContributionEndPicker(false)
+                                          }
+                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
+                                        >
+                                          {copy.buttons.done}
+                                        </button>
+                                      </div>
+                                    </div>,
+                                    document.body,
+                                  )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-4">
+                          <div className="space-y-3">
+                            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                          {copy.labels.monthlyWithdrawalsTitle}
+                            </p>
+                            <div className="flex flex-wrap items-end gap-4">
+                              <div className="flex-1 space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.amountShort}
+                                </p>
+                                <input
+                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
+                                  value={monthlyWithdrawalAmount}
+                                  onChange={(event) =>
+                                    setMonthlyWithdrawalAmount(event.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
+                              {copy.labels.startShort}
+                                </p>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    ref={monthlyPickerButtonRef}
+                                    onClick={() =>
+                                      setShowMonthlyWithdrawalPicker((prev) => !prev)
+                                    }
+                                    className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
+                                  >
+                                    <span>
+                                      {monthlyWithdrawalMonthLabel}{" "}
+                                      {monthlyWithdrawalStartYear}
+                                    </span>
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 24 24"
+                                      className="h-4 w-4 text-[color:var(--theme-muted)]"
+                                    >
+                                      <path
+                                        d="M6 9l6 6 6-6"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                {showMonthlyWithdrawalPicker && (
+                                  <div
+                                    ref={monthlyPickerRef}
+                                    className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
+                                    style={{
+                                      ...(monthlyPickerStyle ?? {}),
+                                      maxHeight: "min(26rem, calc(100vh - 6rem))",
+                                    }}
+                                  >
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.month}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={monthWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {monthWheelItems.map((month, index) => (
+                                                <div
+                                                  key={`month-${month?.value ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!month) {
+                                                      return;
+                                                    }
+                                                    setMonthlyWithdrawalStartMonth(
+                                                      month.value,
+                                                    );
+                                                    snapMonthWheel(
+                                                      monthWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={wheelItemClass(
+                                                      month?.value ===
+                                                        monthlyWithdrawalStartMonth,
+                                                    )}
+                                                  >
+                                                    {month?.label ?? ""}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+                                            {copy.labels.year}
+                                          </p>
+                                          <div className="relative">
+                                            <div
+                                              ref={yearWheelRef}
+                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
+                                              style={{
+                                                height: wheelVisibleItems * wheelItemHeight,
+                                                scrollSnapType: "y mandatory",
+                                                paddingTop: wheelItemHeight / 4,
+                                                paddingBottom: wheelItemHeight / 4,
+                                              }}
+                                            >
+                                              {yearWheelItems.map((year, index) => (
+                                                <div
+                                                  key={`year-${year ?? "pad"}-${index}`}
+                                                  className="flex h-10 items-center justify-center px-2"
+                                                  style={{ scrollSnapAlign: "center" }}
+                                                  onClick={() => {
+                                                    if (!year) {
+                                                      return;
+                                                    }
+                                                    setMonthlyWithdrawalStartYear(
+                                                      year,
+                                                    );
+                                                    snapYearWheel(
+                                                      yearWheelRef.current,
+                                                      index,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span
+                                                    className={wheelItemClass(
+                                                      year ===
+                                                        monthlyWithdrawalStartYear,
+                                                    )}
+                                                  >
+                                                    {year ?? ""}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setShowMonthlyWithdrawalPicker(false)
+                                          }
+                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
+                                        >
+                                          {copy.buttons.done}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-1 flex-col justify-end space-y-2">
+                                <div className="h-[0.9rem]" />
+                                <button
+                                  type="button"
+                                  aria-pressed={showAdvancedBudgetBreakdown}
+                                  onClick={() =>
+                                    setShowAdvancedBudgetBreakdown((prev) => !prev)
+                                  }
+                                  className={`flex h-10 w-full items-center justify-center rounded-full text-[0.95rem] font-bold uppercase tracking-[0.3em] shadow-sm transition ${
+                                    showAdvancedBudgetBreakdown
+                                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                                      : "bg-[color:var(--theme-muted)] text-white hover:opacity-90"
+                                  }`}
+                                >
+                                  {copy.labels.advanced}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFscOutcome(null);
+                              setShowFscEligibility(true);
+                            }}
+                            style={fscButtonStyle(fscOutcome)}
+                            className="mt-4 h-10 w-full rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
+                          >
+                            {fscOutcome === "eligible"
+                              ? copy.federalSavers.buttonEligible
+                              : fscOutcome === "ineligible"
+                                ? copy.federalSavers.buttonIneligible
+                                : copy.federalSavers.buttonDefault}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)] min-h-0">
+                      {messageOrder.map((key) => {
+                        const component = messageComponentMap[key];
+                        if (!component) {
+                          return null;
+                        }
+                        return (
+                          <Fragment key={`right-card-message-${key}`}>
+                            {component}
+                          </Fragment>
+                        );
+                      })}
+
+                    {showAdvancedBudgetBreakdown && renderBudgetSection()}
+                    <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
+                      {copy.misc.disclosureCards.accountActivity.map(
+                        (paragraph, index) => (
+                          <p key={`accountActivity-${index}`}>{paragraph}</p>
+                        ),
+                      )}
+                    </div>
+                  </aside>
+                </div>
+                </div>
+  );
+
   const [showFscEligibility, setShowFscEligibility] = useState(false);
   const [fscOutcome, setFscOutcome] = useState<"eligible" | "ineligible" | null>(
     null,
@@ -3498,629 +4123,10 @@ const comparisonRows = useMemo(
               </div>
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto h-full gap-2">
-              {step === 0 && (
-                <div className="flex min-h-0 flex-1 flex-col gap-6 h-full">
-                  <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_0.8fr] h-full items-stretch">
-                    <div className="flex min-h-0 flex-1 flex-col h-full">
-                      <div className="flex h-full flex-col gap-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-5 shadow-lg">
-                        <div className="flex flex-1 flex-col gap-4">
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                              <div className="grid gap-3 md:grid-cols-2 md:items-center">
-                                <div className="space-y-2">
-                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                    {copy.labels.beneficiary}
-                                  </p>
-                                  <input
-                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                    value={beneficiaryName}
-                                    onChange={(event) =>
-                                      setBeneficiaryName(event.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                    {copy.labels.stateOfResidence}
-                                  </p>
-                                  <select
-                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                    value={stateCode}
-                                    onChange={(event) =>
-                                      setStateCode(event.target.value)
-                                    }
-                                  >
-                                    {availableStateCodes.map((code) => (
-                                      <option key={code} value={code}>
-                                        {code}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                              <div className="grid gap-3 grid-cols-2">
-                                <div className="space-y-2">
-                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                    {copy.labels.taxFilingStatus}
-                                  </p>
-                                  <select
-                                    className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                    value={filingStatus}
-                                    onChange={(event) =>
-                                      setFilingStatus(event.target.value)
-                                    }
-                                  >
-                                    {filingStatusOptions.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                    {copy.labels.adjustedGrossIncome}
-                                  </p>
-                                  <input
-                                    className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                    value={accountAGI}
-                                    onChange={(event) =>
-                                      setAccountAGI(event.target.value)
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                              <div className="space-y-2">
-                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                  {copy.labels.annualReturnAssumption}
-                                </p>
-                                <input
-                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                  value={annualReturnOverride}
-                                  onChange={(event) =>
-                                    setAnnualReturnOverride(event.target.value)
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                              <label className="flex items-center gap-3 text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                <input
-                                  id="beneficiary-ssi-benefits"
-                                  type="checkbox"
-                                  checked={isSsiBeneficiary}
-                                  onChange={(event) =>
-                                    setIsSsiBeneficiary(event.target.checked)
-                                  }
-                                  className="relative h-8 w-8 shrink-0 appearance-none rounded-none border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] text-[color:var(--theme-accent)] shadow-inner transition checked:border-[color:var(--theme-accent)] checked:bg-[color:var(--theme-accent)] before:absolute before:left-1/2 before:top-1/2 before:h-3 before:w-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-[color:var(--theme-accent-text)] before:opacity-0 before:content-[''] checked:before:opacity-100 square-checkbox"
-                                />
-                                <span>{copy.labels.ssiBenefitsQuestion}</span>
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)]">
-                      {residencyWarningMessage && (
-                        <div className="flex flex-col gap-3 rounded-2xl border border-[color:var(--theme-warning)] bg-[color:var(--theme-warning-weak)] p-4 text-xs text-[color:var(--theme-warning-text)]">
-                          <span>{residencyWarningMessage}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (planStateCode) {
-                                setStateCode(planStateCode);
-                              }
-                              setResidencyOverride(true);
-                            }}
-                            className="rounded-full border border-[color:var(--theme-warning)] bg-[color:var(--theme-surface-1)] px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
-                          >
-                            {copy.residency.actionLabel}
-                          </button>
-                        </div>
-                      )}
-                      <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
-                        {copy.misc.disclosureCards.demographics.map(
-                          (paragraph, index) => (
-                            <p key={`demographics-${index}`}>{paragraph}</p>
-                          ),
-                        )}
-                      </div>
-                    </aside>
-                  </div>
-                </div>
-              )}
+              {step === 0 && renderInputsStep0()}
 
-              {step === 1 && (
-                <div className="flex min-h-0 flex-1 flex-col gap-4 h-full">
-                  <div className="grid min-h-0 gap-4 items-stretch lg:grid-cols-[1.25fr_0.73fr] h-full">
-                    <div className="flex min-h-0 flex-1 flex-col h-full">
-                      <div className="flex h-full flex-col rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-3">
-                        <div className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                          <div className="space-y-2">
-                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                              {timeHorizonLabel}
-                            </p>
-                            <input
-                              className="h-10 min-w-[5rem] w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                              type="number"
-                              min={1}
-                              max={50}
-                              step={1}
-                              value={timeHorizonYears}
-                              onChange={(event) => {
-                                const rawValue = event.target.value;
-                                if (rawValue === "") {
-                                  setTimeHorizonYears(rawValue);
-                                  return;
-                                }
-                                const parsedValue = Number(rawValue);
-                                if (!Number.isFinite(parsedValue)) {
-                                  setTimeHorizonYears(rawValue);
-                                  return;
-                                }
-                                const clampedValue = Math.min(
-                                  50,
-                                  Math.max(1, Math.round(parsedValue)),
-                                );
-                                setTimeHorizonYears(String(clampedValue));
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                              {copy.labels.startingBalance}
-                            </p>
-                            <input
-                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                              value={startingBalance}
-                              onChange={(event) =>
-                                setStartingBalance(event.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                              {copy.labels.upfrontContribution}
-                            </p>
-                            <input
-                              className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                              value={beneficiaryUpfrontContribution}
-                              onChange={(event) =>
-                                setBeneficiaryUpfrontContribution(event.target.value)
-                              }
-                            />
-                          </div>
-                        </div>
-                          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                            {copy.labels.contributionsParent}
-                          </p>
-                          <div className="grid gap-4 sm:grid-cols-3 items-end">
-                            <div className="space-y-2">
-                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                {copy.labels.recurringContribution}
-                              </p>
-                              <input
-                                className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                value={beneficiaryRecurringContribution}
-                                onChange={(event) =>
-                                  setBeneficiaryRecurringContribution(event.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                {copy.labels.contributionCadence}
-                              </p>
-                              <select
-                                className="select-pill h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                value={beneficiaryRecurringCadence}
-                                onChange={(event) =>
-                                  setBeneficiaryRecurringCadence(
-                                    event.target.value as (typeof cadenceOptions)[number],
-                                  )
-                                }
-                              >
-                                {cadenceOptions.map((cadence) => (
-                                  <option key={cadence} value={cadence}>
-                                    {copy.cadenceLabels[cadence]}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                                {copy.labels.contributionEndDate}
-                              </p>
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  ref={contributionEndTriggerRef}
-                                  onClick={() =>
-                                    setShowContributionEndPicker((prev) => !prev)
-                                  }
-                                  className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
-                                >
-                                  <span>
-                                    {contributionEndMonthLabel} {contributionEndYear}
-                                  </span>
-                                  <svg
-                                    aria-hidden="true"
-                                    viewBox="0 0 24 24"
-                                    className="h-4 w-4 text-[color:var(--theme-muted)]"
-                                  >
-                                    <path
-                                      d="M6 9l6 6 6-6"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                </button>
-                                {showContributionEndPicker &&
-                                  typeof document !== "undefined" &&
-                                  createPortal(
-                                    <div
-                                      ref={contributionPickerRef}
-                                      className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
-                                      style={{
-                                        ...(contributionPickerStyle ?? {}),
-                                        ...themeVars,
-                                        backgroundColor: "var(--theme-surface-1)",
-                                        color: "var(--theme-fg)",
-                                        maxHeight: "min(26rem, calc(100vh - 6rem))",
-                                      }}
-                                    >
-                                      <div className="grid gap-3 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                            {copy.labels.month}
-                                          </p>
-                                          <div className="relative">
-                                            <div
-                                              ref={contributionMonthWheelRef}
-                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                              style={{
-                                                height: wheelVisibleItems * wheelItemHeight,
-                                                scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight / 4,
-                                                paddingBottom: wheelItemHeight / 4,
-                                              }}
-                                            >
-                                              {contributionMonthWheelItems.map(
-                                                (month, index) => (
-                                                  <div
-                                                    key={`contrib-month-${month?.value ?? "pad"}-${index}`}
-                                                    className="flex h-10 items-center justify-center px-2"
-                                                    style={{ scrollSnapAlign: "center" }}
-                                                    onClick={() => {
-                                                      if (!month) {
-                                                        return;
-                                                      }
-                                                      setHasTouchedContributionEndDate(true);
-                                                      setContributionEndMonth(month.value);
-                                                      snapMonthWheel(
-                                                        contributionMonthWheelRef.current,
-                                                        index,
-                                                      );
-                                                    }}
-                                                  >
-                                                    <span
-                                                      className={wheelItemClass(
-                                                        month?.value ===
-                                                          contributionEndMonth,
-                                                      )}
-                                                    >
-                                                      {month?.label ?? ""}
-                                                    </span>
-                                                  </div>
-                                                ),
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                            {copy.labels.year}
-                                          </p>
-                                          <div className="relative">
-                                            <div
-                                              ref={contributionYearWheelRef}
-                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                              style={{
-                                                height: wheelVisibleItems * wheelItemHeight,
-                                                scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight / 4,
-                                                paddingBottom: wheelItemHeight / 4,
-                                              }}
-                                            >
-                                              {contributionYearWheelItems.map(
-                                                (year, index) => (
-                                                  <div
-                                                    key={`contrib-year-${year ?? "pad"}-${index}`}
-                                                    className="flex h-10 items-center justify-center px-2"
-                                                    style={{ scrollSnapAlign: "center" }}
-                                                    onClick={() => {
-                                                      if (!year) {
-                                                        return;
-                                                      }
-                                                      setHasTouchedContributionEndDate(true);
-                                                      setContributionEndYear(year);
-                                                      snapYearWheel(
-                                                        contributionYearWheelRef.current,
-                                                        index,
-                                                      );
-                                                    }}
-                                                  >
-                                                    <span
-                                                      className={wheelItemClass(
-                                                        year === contributionEndYear,
-                                                      )}
-                                                    >
-                                                      {year ?? ""}
-                                                    </span>
-                                                  </div>
-                                                ),
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="mt-3 flex justify-end">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setShowContributionEndPicker(false)
-                                          }
-                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
-                                        >
-                                          {copy.buttons.done}
-                                        </button>
-                                      </div>
-                                    </div>,
-                                    document.body,
-                                  )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-4 space-y-4">
-                          <div className="space-y-3">
-                            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                          {copy.labels.monthlyWithdrawalsTitle}
-                            </p>
-                            <div className="flex flex-wrap items-end gap-4">
-                              <div className="flex-1 space-y-2">
-                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                              {copy.labels.amountShort}
-                                </p>
-                                <input
-                                  className="h-10 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-inner px-3 text-sm text-[color:var(--theme-fg)]"
-                                  value={monthlyWithdrawalAmount}
-                                  onChange={(event) =>
-                                    setMonthlyWithdrawalAmount(event.target.value)
-                                  }
-                                />
-                              </div>
-                              <div className="flex-1 space-y-2">
-                                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.25em] text-[color:var(--theme-fg)]">
-                              {copy.labels.startShort}
-                                </p>
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    ref={monthlyPickerButtonRef}
-                                    onClick={() =>
-                                      setShowMonthlyWithdrawalPicker((prev) => !prev)
-                                    }
-                                    className="flex h-10 w-full items-center justify-between rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-3 text-sm text-[color:var(--theme-fg)] shadow-inner"
-                                  >
-                                    <span>
-                                      {monthlyWithdrawalMonthLabel}{" "}
-                                      {monthlyWithdrawalStartYear}
-                                    </span>
-                                    <svg
-                                      aria-hidden="true"
-                                      viewBox="0 0 24 24"
-                                      className="h-4 w-4 text-[color:var(--theme-muted)]"
-                                    >
-                                      <path
-                                        d="M6 9l6 6 6-6"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  </button>
-                                {showMonthlyWithdrawalPicker && (
-                                  <div
-                                    ref={monthlyPickerRef}
-                                    className="z-30 rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-3 shadow-lg max-h-[26rem] overflow-hidden"
-                                    style={{
-                                      ...(monthlyPickerStyle ?? {}),
-                                      maxHeight: "min(26rem, calc(100vh - 6rem))",
-                                    }}
-                                  >
-                                      <div className="grid gap-3 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                            {copy.labels.month}
-                                          </p>
-                                          <div className="relative">
-                                            <div
-                                              ref={monthWheelRef}
-                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                              style={{
-                                                height: wheelVisibleItems * wheelItemHeight,
-                                                scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight / 4,
-                                                paddingBottom: wheelItemHeight / 4,
-                                              }}
-                                            >
-                                              {monthWheelItems.map((month, index) => (
-                                                <div
-                                                  key={`month-${month?.value ?? "pad"}-${index}`}
-                                                  className="flex h-10 items-center justify-center px-2"
-                                                  style={{ scrollSnapAlign: "center" }}
-                                                  onClick={() => {
-                                                    if (!month) {
-                                                      return;
-                                                    }
-                                                    setMonthlyWithdrawalStartMonth(
-                                                      month.value,
-                                                    );
-                                                    snapMonthWheel(
-                                                      monthWheelRef.current,
-                                                      index,
-                                                    );
-                                                  }}
-                                                >
-                                                  <span
-                                                    className={wheelItemClass(
-                                                      month?.value ===
-                                                        monthlyWithdrawalStartMonth,
-                                                    )}
-                                                  >
-                                                    {month?.label ?? ""}
-                                                  </span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                            {copy.labels.year}
-                                          </p>
-                                          <div className="relative">
-                                            <div
-                                              ref={yearWheelRef}
-                                              className="overflow-y-auto rounded-xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-sm text-[color:var(--theme-fg)]"
-                                              style={{
-                                                height: wheelVisibleItems * wheelItemHeight,
-                                                scrollSnapType: "y mandatory",
-                                                paddingTop: wheelItemHeight / 4,
-                                                paddingBottom: wheelItemHeight / 4,
-                                              }}
-                                            >
-                                              {yearWheelItems.map((year, index) => (
-                                                <div
-                                                  key={`year-${year ?? "pad"}-${index}`}
-                                                  className="flex h-10 items-center justify-center px-2"
-                                                  style={{ scrollSnapAlign: "center" }}
-                                                  onClick={() => {
-                                                    if (!year) {
-                                                      return;
-                                                    }
-                                                    setMonthlyWithdrawalStartYear(
-                                                      year,
-                                                    );
-                                                    snapYearWheel(
-                                                      yearWheelRef.current,
-                                                      index,
-                                                    );
-                                                  }}
-                                                >
-                                                  <span
-                                                    className={wheelItemClass(
-                                                      year ===
-                                                        monthlyWithdrawalStartYear,
-                                                    )}
-                                                  >
-                                                    {year ?? ""}
-                                                  </span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="mt-3 flex justify-end">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setShowMonthlyWithdrawalPicker(false)
-                                          }
-                                          className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm"
-                                        >
-                                          {copy.buttons.done}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-1 flex-col justify-end space-y-2">
-                                <div className="h-[0.9rem]" />
-                                <button
-                                  type="button"
-                                  aria-pressed={showAdvancedBudgetBreakdown}
-                                  onClick={() =>
-                                    setShowAdvancedBudgetBreakdown((prev) => !prev)
-                                  }
-                                  className={`flex h-10 w-full items-center justify-center rounded-full text-[0.95rem] font-bold uppercase tracking-[0.3em] shadow-sm transition ${
-                                    showAdvancedBudgetBreakdown
-                                      ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                      : "bg-[color:var(--theme-muted)] text-white hover:opacity-90"
-                                  }`}
-                                >
-                                  {copy.labels.advanced}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFscOutcome(null);
-                              setShowFscEligibility(true);
-                            }}
-                            style={fscButtonStyle(fscOutcome)}
-                            className="mt-4 h-10 w-full rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-4 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
-                          >
-                            {fscOutcome === "eligible"
-                              ? copy.federalSavers.buttonEligible
-                              : fscOutcome === "ineligible"
-                                ? copy.federalSavers.buttonIneligible
-                                : copy.federalSavers.buttonDefault}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <aside className="flex min-h-0 flex-1 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-5 h-full overflow-y-auto max-h-[calc(100vh-16rem)] min-h-0">
-                      {messageOrder.map((key) => {
-                        const component = messageComponentMap[key];
-                        if (!component) {
-                          return null;
-                        }
-                        return (
-                          <Fragment key={`right-card-message-${key}`}>
-                            {component}
-                          </Fragment>
-                        );
-                      })}
+              {step === 1 && renderInputsStep1()}
 
-                    {showAdvancedBudgetBreakdown && renderBudgetSection()}
-                    <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
-                      {copy.misc.disclosureCards.accountActivity.map(
-                        (paragraph, index) => (
-                          <p key={`accountActivity-${index}`}>{paragraph}</p>
-                        ),
-                      )}
-                    </div>
-                  </aside>
-                </div>
-                </div>
-              )}
             </div>
 
             {step === 2 && (
