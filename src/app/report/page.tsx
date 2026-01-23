@@ -1,6 +1,13 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import {
+  ChartNoAxesCombined,
+  CircleDollarSign,
+  Form,
+  StickyNote,
+  Table2,
+} from "lucide-react";
 import { getThemeForClient, themeToCssVars } from "@/lib/theme";
 import { uiPreviewCopy } from "@/data/copy";
 
@@ -18,106 +25,10 @@ type ReportTab = {
   id: ReportTabId;
   label: string;
   icon: React.ReactNode;
+  activeBorderColor?: string;
 };
 
-function IconBars(props: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className={props.className ?? "h-5 w-5"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M6 20V10" />
-      <path d="M12 20V4" />
-      <path d="M18 20v-8" />
-    </svg>
-  );
-}
-
-function IconDoc(props: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className={props.className ?? "h-5 w-5"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-      <path d="M9 13h6" />
-      <path d="M9 17h6" />
-    </svg>
-  );
-}
-
-function IconChart(props: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className={props.className ?? "h-5 w-5"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 19V5" />
-      <path d="M4 19h16" />
-      <path d="M7 15l3-3 3 2 4-6" />
-      <path d="M17 8h0" />
-    </svg>
-  );
-}
-
-function IconTable(props: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className={props.className ?? "h-5 w-5"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 5h18v14H3z" />
-      <path d="M3 10h18" />
-      <path d="M8 5v14" />
-      <path d="M16 5v14" />
-    </svg>
-  );
-}
-
-function IconNote(props: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className={props.className ?? "h-5 w-5"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 4h16v16H4z" />
-      <path d="M8 9h8" />
-      <path d="M8 13h8" />
-      <path d="M8 17h6" />
-    </svg>
-  );
-}
+const ICON_BOX_CLASS = "h-[86px] w-[86px]";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -126,11 +37,36 @@ function classNames(...parts: Array<string | false | null | undefined>) {
 export default function ReportShellPage() {
   const tabs: ReportTab[] = useMemo(
     () => [
-      { id: "overview", label: "Inputs", icon: <IconDoc /> },
-      { id: "summary", label: "Summary", icon: <IconBars /> },
-      { id: "charts", label: "Charts", icon: <IconChart /> },
-      { id: "table", label: "Table", icon: <IconTable /> },
-      { id: "notes", label: "Notes", icon: <IconNote /> },
+      {
+        id: "overview",
+        label: "Inputs",
+        icon: <Form className="h-11 w-11 md:h-14 md:w-14 text-[color:var(--theme-accent)]" />,
+        activeBorderColor: "var(--theme-accent)",
+      },
+      {
+        id: "summary",
+        label: "Account activity",
+        icon: <ChartNoAxesCombined className="h-11 w-11 md:h-14 md:w-14 text-red-600" />,
+        activeBorderColor: "#dc2626",
+      },
+      {
+        id: "charts",
+        label: "Tax benefits",
+        icon: <CircleDollarSign className="h-11 w-11 md:h-14 md:w-14 text-green-600" />,
+        activeBorderColor: "#16a34a",
+      },
+      {
+        id: "table",
+        label: "Amortization table",
+        icon: <Table2 className="h-11 w-11 md:h-14 md:w-14 text-[#d97706]" />,
+        activeBorderColor: "#d97706",
+      },
+      {
+        id: "notes",
+        label: "Disclosures",
+        icon: <StickyNote className="h-11 w-11 md:h-14 md:w-14 text-[color:var(--theme-fg)]" />,
+        activeBorderColor: "var(--theme-fg)",
+      },
     ],
     [],
   );
@@ -144,6 +80,13 @@ export default function ReportShellPage() {
     () => themeToCssVars(getThemeForClient(selectedClientId)),
     [selectedClientId],
   );
+  const iconOnlyTabIds = new Set<ReportTabId>([
+    "overview",
+    "summary",
+    "charts",
+    "table",
+    "notes",
+  ]);
 
   return (
     <div
@@ -188,58 +131,73 @@ export default function ReportShellPage() {
         </header>
         <div className="grid min-h-[calc(100vh-2rem)] grid-cols-1 gap-4 mt-4 md:grid-cols-[10.95rem_1fr]">
           {/* Left rail (desktop) */}
-          <aside className="hidden md:flex flex-col rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
-            <div className="px-5 pt-5 pb-3">
-              <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                Report navigation
-              </p>
-              <h1 className="mt-2 text-xl font-semibold tracking-tight">
-                Final report
-              </h1>
-              <p className="mt-1 text-sm text-[color:var(--theme-muted)]">
-                Switch between views
-              </p>
-            </div>
+          <aside className="hidden md:flex flex-col rounded-3xl bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
 
-      <nav className="flex flex-col gap-2 px-3 pb-4">
+            <nav className="flex flex-col gap-2 px-3 pb-4 pt-3">
               {tabs.map((t) => {
                 const isActive = t.id === activeTab;
+                const isIconTab = iconOnlyTabIds.has(t.id);
+                const activeBorderStyle =
+                  isActive && t.activeBorderColor
+                    ? { borderColor: t.activeBorderColor }
+                    : undefined;
                 return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            className={classNames(
-              "group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
-              "min-h-[5rem]",
-              isActive
-                ? "border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)] hover:bg-[color:var(--theme-surface-1)]",
-            )}
-            aria-current={isActive ? "page" : undefined}
-          >
-                    <span
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveTab(t.id)}
+                    className={classNames(
+                      "group rounded-2xl transition min-h-[3.6rem] transform",
+                      isIconTab
+                        ? "border-0 md:border md:border-transparent bg-transparent px-0 py-0"
+                        : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-3 text-[color:var(--theme-fg)] hover:bg-[color:var(--theme-surface-1)]",
+                      isActive && !isIconTab
+                        ? "border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                        : "",
+                      isActive ? "scale-[1.2]" : "scale-[0.95]",
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                    style={activeBorderStyle}
+                  >
+                    <div
                       className={classNames(
-                        "inline-flex h-10 w-10 items-center justify-center rounded-2xl",
-                        isActive
-                          ? "bg-white/15"
-                          : "bg-[color:var(--theme-surface-1)]",
+                        "flex",
+                        !isIconTab ? "items-center gap-3" : "flex-col items-center gap-0",
                       )}
                     >
-                      <span className="text-current">{t.icon}</span>
-                    </span>
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-sm font-semibold">{t.label}</span>
-                    </span>
+                      <span
+                        className={classNames(
+                          "inline-flex items-center justify-center transition-transform duration-200",
+                          isIconTab
+                            ? `${ICON_BOX_CLASS} bg-[color:var(--theme-surface-1)]`
+                            : "h-10 w-10 rounded-2xl",
+                          !isIconTab &&
+                            (isActive
+                              ? "bg-white/15"
+                              : "bg-[color:var(--theme-surface-1)]"),
+                        )}
+                      >
+                        <span className="text-current">{t.icon}</span>
+                      </span>
+                      <span
+                        className={classNames(
+                          isIconTab
+                            ? "text-[0.45rem] sm:text-[0.55rem] md:text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)] md:-mt-1 -mt-0"
+                            : "text-sm font-semibold",
+                          isActive ? "font-black text-[color:var(--theme-accent)]" : "",
+                        )}
+                      >
+                        {isIconTab ? t.label.toUpperCase() : t.label}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </nav>
-
           </aside>
 
           {/* Main panel */}
-          <main className="min-h-0 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
+          <main className="min-h-0 rounded-3xl border-0 md:border md:border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] shadow-lg backdrop-blur">
             <div className="min-h-0">
               {activeTab === "overview" ? (
                 // This is the key: the existing planner page renders here
@@ -285,7 +243,7 @@ export default function ReportShellPage() {
             </div>
 
             {/* Bottom bar (mobile) */}
-            <div className="sticky bottom-0 z-40 border-t border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-2 py-2 md:hidden">
+            <div className="sticky bottom-0 z-40 border-t-0 bg-[color:var(--theme-surface-1)] px-2 py-2 md:hidden">
               <nav className="grid grid-cols-5 gap-2">
                 {tabs.map((t) => {
                   const isActive = t.id === activeTab;
@@ -294,16 +252,18 @@ export default function ReportShellPage() {
                       key={t.id}
                       type="button"
                       onClick={() => setActiveTab(t.id)}
-                      className={classNames(
-                        "flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em] transition",
-                        isActive
-                          ? "border-[color:var(--theme-accent)] bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]",
-                      )}
+                    className={classNames(
+                      "flex flex-col items-center justify-center gap-1 rounded-2xl border-none px-2 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em] transition",
+                      isActive
+                        ? "bg-[#e5e7eb] text-[color:var(--theme-fg)]"
+                        : "bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]",
+                    )}
                       aria-current={isActive ? "page" : undefined}
                     >
                       <span className="text-current">{t.icon}</span>
-                      <span className="leading-none">{t.label}</span>
+                      <span className="leading-none text-[0.45rem] uppercase tracking-[0.35em]">
+                        {t.label}
+                      </span>
                     </button>
                   );
                 })}
