@@ -20,6 +20,19 @@ import type {
   CalculationResult,
 } from "../types/calculations";
 
+type FilingStatusOption = { value: string; label: string };
+
+export type InputsCtx = {
+  copy: any;
+  themeVars: Record<string, string>;
+
+  availableStateCodes: string[];
+  filingStatusOptions: FilingStatusOption[];
+  cadenceOptions: string[];
+
+  [key: string]: any;
+};
+
 const cadenceOptions = ["monthly", "annual"] as const;
 const filingStatusValues = [
   "single",
