@@ -313,6 +313,46 @@ export default function UiPreviewPage() {
         return acc;
       }, {} as Record<AdvancedBudgetKey, string>),
   );
+
+  const renderBudgetSection = () => (
+    <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+          {copy.misc.budgetQualifiedHeader}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowAdvancedBudgetBreakdown(false)}
+          className="flex w-8 h-8 min-w-8 min-h-8 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-sm font-semibold text-[color:var(--theme-danger)] transition hover:bg-[color:var(--theme-danger)]/10 box-border p-0 items-center justify-center"
+          aria-label={copy.misc.close}
+        >
+          ×
+        </button>
+      </div>
+      <div className="mt-3 space-y-2">
+        {advancedBudgetFields.map((field) => (
+          <div key={field.key} className="space-y-[0.25rem]">
+            <label className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
+              {field.label}
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="h-9 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] px-3 text-sm text-[color:var(--theme-fg)]"
+              value={advancedBudgetValues[field.key]}
+              onChange={(event) =>
+                setAdvancedBudgetValues((prev) => ({
+                  ...prev,
+                  [field.key]: event.target.value,
+                }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
   const [showFscEligibility, setShowFscEligibility] = useState(false);
   const [fscOutcome, setFscOutcome] = useState<"eligible" | "ineligible" | null>(
     null,
@@ -4067,45 +4107,7 @@ const comparisonRows = useMemo(
                         );
                       })}
 
-                    {showAdvancedBudgetBreakdown && (
-                      <div className="rounded-2xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                            {copy.misc.budgetQualifiedHeader}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setShowAdvancedBudgetBreakdown(false)}
-                            className="flex w-8 h-8 min-w-8 min-h-8 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] text-sm font-semibold text-[color:var(--theme-danger)] transition hover:bg-[color:var(--theme-danger)]/10 box-border p-0 items-center justify-center"
-                            aria-label={copy.misc.close}
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {advancedBudgetFields.map((field) => (
-                            <div key={field.key} className="space-y-[0.25rem]">
-                              <label className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--theme-muted)]">
-                                {field.label}
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="h-9 w-full rounded-2xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-2)] px-3 text-sm text-[color:var(--theme-fg)]"
-                                value={advancedBudgetValues[field.key]}
-                                onChange={(event) =>
-                                  setAdvancedBudgetValues((prev) => ({
-                                    ...prev,
-                                    [field.key]: event.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {showAdvancedBudgetBreakdown && renderBudgetSection()}
                     <div className="space-y-3 text-sm text-[color:var(--theme-muted)]">
                       {copy.misc.disclosureCards.accountActivity.map(
                         (paragraph, index) => (
