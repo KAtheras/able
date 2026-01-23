@@ -419,6 +419,8 @@ export default function UiPreviewPage() {
     ? getStatePlanInfo(planStateCode).name
     : null;
 
+  const renderInputsStepHeader = () => null;
+
   const currentStep = steps[step];
   const currentYear = new Date().getFullYear();
   const currentMonthIndex = new Date().getMonth();
