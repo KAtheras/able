@@ -33,6 +33,22 @@ export type InputsCtx = {
   [key: string]: any;
 };
 
+export type UiPreviewPageReportMode =
+  | "inputs"
+  | "report-table"
+  | "report-amortization";
+
+export type UiPreviewPageProps = {
+  maxStepIndex?: number;
+  initialStepIndex?: number;
+  initialReportViewMode?: "default" | "table";
+  initialShowSchedule?: boolean;
+  hideHeader?: boolean;
+  language?: UiPreviewLanguage;
+  horizonControlPortalId?: string;
+  reportMode?: UiPreviewPageReportMode;
+};
+
 const cadenceOptions = ["monthly", "annual"] as const;
 const filingStatusValues = [
   "single",
@@ -252,11 +268,20 @@ function calculateMonthlyIrr(cashflows: number[]) {
 }
 
 
-export default function UiPreviewPage() {
+export default function UiPreviewPage({
+  maxStepIndex,
+  initialStepIndex,
+  initialReportViewMode,
+  initialShowSchedule = false,
+  hideHeader = false,
+  language: propLanguage,
+  horizonControlPortalId,
+  reportMode,
+}: UiPreviewPageProps = {}) {
   const [step, setStep] = useState(0);
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(initialShowSchedule);
   const [selectedClientId, setSelectedClientId] = useState("state-il");
-  const [language, setLanguage] = useState<UiPreviewLanguage>("en");
+  const language = propLanguage ?? "en";
   const [residencyOverride, setResidencyOverride] = useState(false);
 
   const [beneficiaryName, setBeneficiaryName] = useState("");
@@ -1005,13 +1030,31 @@ export default function UiPreviewPage() {
   const [fscIsStudent, setFscIsStudent] = useState<boolean | null>(null);
   const [fscIsDependent, setFscIsDependent] = useState<boolean | null>(null);
   const [selectedHorizon, setSelectedHorizon] = useState<number | "max">("max");
-  const [showAnnualReturns, setShowAnnualReturns] = useState(false);
   const [rightCardView, setRightCardView] = useState<"charts" | "tables">(
     "charts",
   );
+  const showAnnualReturns = false;
   const [reportViewMode, setReportViewMode] = useState<"default" | "table">(
-    "default",
+    initialReportViewMode ?? "default",
   );
+  useEffect(() => {
+    if (initialReportViewMode) {
+      setReportViewMode(initialReportViewMode);
+    }
+  }, [initialReportViewMode]);
+  const [horizonPortalTarget, setHorizonPortalTarget] =
+    useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!horizonControlPortalId) {
+      setHorizonPortalTarget(null);
+      return;
+    }
+    if (typeof document === "undefined") {
+      setHorizonPortalTarget(null);
+      return;
+    }
+    setHorizonPortalTarget(document.getElementById(horizonControlPortalId));
+  }, [horizonControlPortalId]);
 
   const copy = uiPreviewCopy[language];
   const timeHorizonLabel = copy.labels.timeHorizonYears.replace(
@@ -1019,6 +1062,40 @@ export default function UiPreviewPage() {
     "YRS",
   );
   const steps = copy.steps;
+  const lastStepIndex = steps.length - 1;
+  const boundedMaxStepIndex = Math.min(
+    lastStepIndex,
+    Math.max(0, maxStepIndex ?? lastStepIndex),
+  );
+  useEffect(() => {
+    setStep((prevStep) => Math.min(prevStep, boundedMaxStepIndex));
+  }, [boundedMaxStepIndex]);
+
+  useEffect(() => {
+    if (initialStepIndex == null) {
+      return;
+    }
+    setStep(() =>
+      Math.min(
+        boundedMaxStepIndex,
+        Math.max(0, initialStepIndex),
+      ),
+    );
+  }, [initialStepIndex, boundedMaxStepIndex]);
+  useEffect(() => {
+    if (!reportMode) {
+      return;
+    }
+    if (reportMode === "inputs") {
+      setStep(0);
+      setShowSchedule(false);
+      setReportViewMode("default");
+      return;
+    }
+    setStep(lastStepIndex);
+    setReportViewMode("table");
+    setShowSchedule(reportMode === "report-amortization");
+  }, [reportMode, lastStepIndex]);
   const monthNames = copy.monthNamesShort;
   const monthNamesLong = copy.monthNamesLong;
   const filingStatusOptions = filingStatusValues.map((value) => ({
@@ -2147,6 +2224,49 @@ export default function UiPreviewPage() {
   const totalYearsForDisplay = useMemo(() => {
     return Math.max(1, Math.floor(taxAwareSchedule.length / 12));
   }, [taxAwareSchedule.length]);
+  const horizonControlElement =
+    step === steps.length - 1 ? (
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <span className="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
+          {copy.misc.stepHeaders.horizonPrompt}
+        </span>
+        <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-2 py-1">
+          {availableHorizons.map((value) => {
+            const label =
+              value === "max"
+                ? copy.misc.horizonMaxLabel
+                : `${value}${copy.misc.horizonYearSuffix}`;
+            const isActive = selectedHorizon === value;
+            return (
+              <button
+                key={`horizon-${value}`}
+                type="button"
+                onClick={() => setSelectedHorizon(value)}
+                className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.25em] transition whitespace-nowrap ${
+                  isActive
+                    ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                    : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                }`}
+              >
+                <span>{label}</span>
+                {value === "max" && isActive ? (
+                  <span className="ml-2 text-[0.55rem] tracking-[0.2em]">
+                    {`${totalYearsForDisplay}${copy.misc.horizonYearSuffix}`}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+  const horizonControlInline = horizonControlPortalId
+    ? null
+    : horizonControlElement;
+  const horizonControlPortal =
+    horizonPortalTarget && horizonControlElement && horizonControlPortalId
+      ? createPortal(horizonControlElement, horizonPortalTarget)
+      : null;
 
   useEffect(() => {
     if (selectedHorizon === "max") {
@@ -3203,20 +3323,15 @@ const comparisonRows = useMemo(
     setShowContributionEndPicker(false);
   }, [step, showSchedule]);
 
-  const showReportTabs = step === steps.length - 1 || showSchedule;
-  const isSummaryTabActive =
-    step === steps.length - 1 && !showSchedule && reportViewMode === "default";
-  const isTabularTabActive =
+  const isReportTableOnly =
     step === steps.length - 1 && !showSchedule && reportViewMode === "table";
-  const isAmortizationTabActive = showSchedule;
-
   const actionControls = (
     <>
-      {step < steps.length - 1 && (
+      {step < boundedMaxStepIndex && (
         <button
           type="button"
           onClick={() =>
-            setStep((prev) => Math.min(steps.length - 1, prev + 1))
+            setStep((prev) => Math.min(boundedMaxStepIndex, prev + 1))
           }
           disabled={disableNext}
           aria-label={copy.buttons.next}
@@ -3234,7 +3349,7 @@ const comparisonRows = useMemo(
           </svg>
         </button>
       )}
-      {step === steps.length - 1 && !showSchedule ? (
+      {step === steps.length - 1 && !showSchedule && !isReportTableOnly ? (
         <button
           type="button"
           onClick={() => window.print()}
@@ -3253,43 +3368,6 @@ const comparisonRows = useMemo(
           </svg>
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          window.location.reload();
-        }}
-        aria-label={copy.accessibility.refresh}
-        className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
-          <path
-            d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      <div className="flex items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-        <span className="sr-only">{copy.languageLabel}</span>
-        {(["en", "es"] as const).map((lang) => (
-          <button
-            key={lang}
-            type="button"
-            onClick={() => setLanguage(lang)}
-            aria-pressed={language === lang}
-            className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold tracking-[0.25em] transition ${
-              language === lang
-                ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-            }`}
-          >
-            {lang.toUpperCase()}
-          </button>
-        ))}
-      </div>
     </>
   );
 
@@ -3750,6 +3828,7 @@ const comparisonRows = useMemo(
   };
 
   return (
+    <>
     <div
       className="min-h-screen flex flex-col"
       style={{
@@ -3762,130 +3841,44 @@ const comparisonRows = useMemo(
         <div className="pointer-events-none absolute -left-32 top-10 h-40 w-40 rounded-full bg-[color:var(--theme-accent)]/20 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 top-40 h-48 w-48 rounded-full bg-[color:var(--theme-accent)]/15 blur-3xl" />
 
-        <header className="flex shrink-0 flex-col gap-2 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-2 shadow-lg backdrop-blur">
-          <p className="text-xs uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
-            {copy.header.bannerPlaceholder}
-          </p>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
-                {copy.header.clientName}
-              </h1>
-              <p className="mt-1 text-sm text-[color:var(--theme-muted)]">
-                {copy.header.clientSubtitle}
-              </p>
-            </div>
-            <div className="flex flex-row flex-wrap items-center gap-3 max-[1024px]:flex-col max-[1024px]:items-stretch">
-              <select
-                className="select-pill rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]"
-                value={selectedClientId}
-                onChange={(event) => setSelectedClientId(event.target.value)}
-              >
-                <option value="base">{copy.themes.base}</option>
-                <option value="state-ca">{copy.themes.ca}</option>
-                <option value="state-il">{copy.themes.il}</option>
-                <option value="state-ut">{copy.themes.ut}</option>
-                <option value="state-tx">{copy.themes.tx}</option>
-              </select>
-              <div className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                {copy.screenLabel(step + 1, steps.length)}
+        {!hideHeader && (
+          <header className="flex shrink-0 flex-col gap-2 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-2 shadow-lg backdrop-blur">
+            <p className="text-xs uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+              {copy.header.bannerPlaceholder}
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight text-[color:var(--theme-fg)]">
+                  {copy.header.clientName}
+                </h1>
+                <p className="mt-1 text-sm text-[color:var(--theme-muted)]">
+                  {copy.header.clientSubtitle}
+                </p>
+              </div>
+              <div className="flex flex-row flex-wrap items-center gap-3 max-[1024px]:flex-col max-[1024px]:items-stretch">
+                <select
+                  className="select-pill rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]"
+                  value={selectedClientId}
+                  onChange={(event) => setSelectedClientId(event.target.value)}
+                >
+                  <option value="base">{copy.themes.base}</option>
+                  <option value="state-ca">{copy.themes.ca}</option>
+                  <option value="state-il">{copy.themes.il}</option>
+                  <option value="state-ut">{copy.themes.ut}</option>
+                  <option value="state-tx">{copy.themes.tx}</option>
+                </select>
+                <div className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-4 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
+                  {copy.screenLabel(step + 1, steps.length)}
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {showSchedule ? (
           <section className="flex flex-1 min-h-0 flex-col space-y-1 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 py-2 shadow-lg backdrop-blur max-[1024px]:pb-28">
             <div className="flex w-full items-center gap-3 max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
               <div className="flex-1" />
-              <div className="flex items-center gap-2">
-                {showReportTabs && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep(steps.length - 1);
-                        setShowSchedule(false);
-                        setReportViewMode("default");
-                      }}
-                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                        isSummaryTabActive
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                      }`}
-                    >
-                      Summary
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep(steps.length - 1);
-                        setShowSchedule(false);
-                        setReportViewMode("table");
-                      }}
-                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                        isTabularTabActive
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                      }`}
-                    >
-                      Tabular
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep(steps.length - 1);
-                        setShowSchedule(true);
-                      }}
-                      className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                        isAmortizationTabActive
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                      }`}
-                    >
-                      {copy.buttons.openSchedule}
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={handleDownloadAmortizationCsv}
-                  disabled={filteredScheduleRows.length === 0}
-                  aria-label={copy.misc.downloadScheduleButton}
-                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 12h12M10 5v7l3-3M10 12l-3-3" />
-                  </svg>
-                </button>
-                <div className="flex items-center gap-2 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-3 py-2 text-xs uppercase tracking-[0.35em] text-[color:var(--theme-muted)]">
-                  <span className="sr-only">{copy.languageLabel}</span>
-                  {(["en", "es"] as const).map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => setLanguage(lang)}
-                      aria-pressed={language === lang}
-                      className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold tracking-[0.25em] transition ${
-                        language === lang
-                          ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                          : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                      }`}
-                    >
-                      {lang.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
               <span />
@@ -4012,131 +4005,64 @@ const comparisonRows = useMemo(
             </div>
           </section>
         ) : (
-          <section className="flex flex-1 min-h-0 flex-col space-y-4 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] p-6 pb-0 shadow-lg backdrop-blur max-[1024px]:pb-28">
-            <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
-              <div className="flex w-full items-center justify-between gap-3 lg:w-auto lg:justify-start">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (showSchedule) {
-                      setShowSchedule(false);
-                    } else {
-                      setStep((prev) => Math.max(0, prev - 1));
-                    }
-                  }}
-                  disabled={step === 0 && !showSchedule}
-                  aria-label={copy.buttons.back}
-                  className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
-                    <path
-                      d="M13 4l-6 6 6 6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <div className="flex items-center gap-2 lg:hidden">
-                  {actionControls}
-                </div>
-              </div>
-              <div className="flex justify-center">
-                {step === 0 ? (
-                  <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
-                    {copy.misc.stepHeaders.demographics}
-                  </div>
-                ) : null}
-                {step === 1 ? (
-                  <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
-                    {copy.misc.stepHeaders.accountActivity}
-                  </div>
-                ) : null}
-                {step === steps.length - 1 ? (
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    <span className="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--theme-muted)]">
-                      {copy.misc.stepHeaders.horizonPrompt}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] px-2 py-1">
-                      {availableHorizons.map((value) => {
-                        const label =
-                          value === "max"
-                            ? copy.misc.horizonMaxLabel
-                            : `${value}${copy.misc.horizonYearSuffix}`;
-                        const isActive = selectedHorizon === value;
-                        return (
-                          <button
-                            key={`horizon-${value}`}
-                            type="button"
-                            onClick={() => setSelectedHorizon(value)}
-                        className={`rounded-full px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.25em] transition whitespace-nowrap ${
-                              isActive
-                                ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                                : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                            }`}
-                          >
-                            <span>{label}</span>
-                            {value === "max" && isActive ? (
-                              <span className="ml-2 text-[0.55rem] tracking-[0.2em]">
-                                {`${totalYearsForDisplay}${copy.misc.horizonYearSuffix}`}
-                              </span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <div className="flex items-center gap-2">
-                  {step === steps.length - 1 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setReportViewMode("default")}
-                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                          reportViewMode === "default"
-                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                        }`}
-                      >
-                        Summary
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setReportViewMode("table")}
-                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                          reportViewMode === "table"
-                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                        }`}
-                      >
-                        Tabular
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowSchedule(true)}
-                        className={`rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] transition ${
-                          showSchedule
-                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                            : "border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-muted)]"
-                        }`}
-                      >
-                        {copy.buttons.openSchedule}
-                      </button>
-                    </>
+          <section className="flex flex-1 min-h-0 flex-col space-y-0 rounded-3xl border border-[color:var(--theme-border)] bg-[color:var(--theme-surface-1)] px-6 pb-0 shadow-lg backdrop-blur max-[1024px]:pb-28">
+            {step !== steps.length - 1 && (
+              <div className="flex w-full flex-col gap-0 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center max-[1024px]:sticky max-[1024px]:top-4 max-[1024px]:z-40">
+                <div className="flex w-full items-center justify-between gap-3 lg:w-auto lg:justify-start">
+                  {!isReportTableOnly && (step > 0 || showSchedule) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showSchedule) {
+                          setShowSchedule(false);
+                        } else {
+                          setStep((prev) => Math.max(0, prev - 1));
+                        }
+                      }}
+                      disabled={step === 0 && !showSchedule}
+                      aria-label={copy.buttons.back}
+                      className="rounded-full border border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] p-2 text-[color:var(--theme-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
+                        <path
+                          d="M13 4l-6 6 6 6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
                   )}
+                  <div className="flex items-center gap-2 lg:hidden">
+                    {actionControls}
+                  </div>
                 </div>
-                <div className="hidden items-center justify-end gap-2 lg:flex">
-                  {actionControls}
+                <div className="flex justify-center">
+                  {step === 0 ? (
+                    <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                      {copy.misc.stepHeaders.demographics}
+                    </div>
+                  ) : null}
+                  {step === 1 ? (
+                    <div className="text-sm font-semibold uppercase tracking-[0.4em] text-[color:var(--theme-muted)]">
+                      {copy.misc.stepHeaders.accountActivity}
+                    </div>
+                  ) : null}
+                  {horizonControlInline ? (
+                    <div className="flex justify-center">{horizonControlInline}</div>
+                  ) : null}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <div className="hidden items-center justify-end gap-2 lg:flex">
+                    {actionControls}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto h-full gap-2">
-              {step === 0 && renderInputsStep0()}
+            {step === 0 && renderInputsStep0()}
 
               {step === 1 && renderInputsStep1()}
 
@@ -4220,62 +4146,39 @@ const comparisonRows = useMemo(
                   </div>
                 </div>
                 <div className="relative flex h-full flex-col rounded-3xl border border-[color:var(--theme-accent)] bg-[color:var(--theme-surface)] px-4 pb-0 pt-3">
-                      <div className="flex flex-wrap items-end justify-between gap-2">
-                      <div className="flex items-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowAnnualReturns(false)}
-                          className={`rounded-t-xl border px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.2em] transition ${
-                            !showAnnualReturns
-                              ? "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)]"
-                              : "border-transparent text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                          }`}
-                        >
-                          {copy.report.cards.taxBenefits.label}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowAnnualReturns(true)}
-                          className={`rounded-t-xl border px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.2em] transition ${
-                            showAnnualReturns
-                              ? "border-[color:var(--theme-border)] bg-[color:var(--theme-surface)] text-[color:var(--theme-fg)]"
-                              : "border-transparent text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                          }`}
-                        >
-                          {copy.report.cards.averageAnnualReturns.label}
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1 rounded-full bg-[color:var(--theme-surface-1)] p-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em]">
-                        <button
-                          type="button"
-                          onClick={() => setRightCardView("charts")}
-                          className={`rounded-full px-3 py-1 transition ${
-                            rightCardView === "charts"
-                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                              : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                          }`}
-                        >
-                          {copy.report.cards.viewToggle.charts}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRightCardView("tables")}
-                          className={`rounded-full px-3 py-1 transition ${
-                            rightCardView === "tables"
-                              ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
-                              : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
-                          }`}
-                        >
-                          {copy.report.cards.viewToggle.tables}
-                        </button>
-                      </div>
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div />
+                    <div className="flex items-center gap-1 rounded-full bg-[color:var(--theme-surface-1)] p-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em]">
+                      <button
+                        type="button"
+                        onClick={() => setRightCardView("charts")}
+                        className={`rounded-full px-3 py-1 transition ${
+                          rightCardView === "charts"
+                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                            : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                        }`}
+                      >
+                        {copy.report.cards.viewToggle.charts}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRightCardView("tables")}
+                        className={`rounded-full px-3 py-1 transition ${
+                          rightCardView === "tables"
+                            ? "bg-[color:var(--theme-accent)] text-[color:var(--theme-accent-text)]"
+                            : "text-[color:var(--theme-muted)] hover:text-[color:var(--theme-fg)]"
+                        }`}
+                      >
+                        {copy.report.cards.viewToggle.tables}
+                      </button>
                     </div>
-                    {!showAnnualReturns && copy.report.cards.taxBenefits.note ? (
-                      <p className="mt-0 text-xs text-[color:var(--theme-muted)]">
-                        {copy.report.cards.taxBenefits.note}
-                      </p>
-                    ) : null}
-                    <div className="mt-0 flex-1 flex flex-col justify-start gap-4">
+                  </div>
+                  {copy.report.cards.taxBenefits.note ? (
+                    <p className="mt-0 text-xs text-[color:var(--theme-muted)]">
+                      {copy.report.cards.taxBenefits.note}
+                    </p>
+                  ) : null}
+                  <div className="mt-0 flex-1 flex flex-col justify-start gap-4">
                       {showAnnualReturns ? (
                         rightCardView === "charts" ? (
                           <div className="flex flex-1 flex-col gap-0" style={{ minHeight: 0 }}>
@@ -4570,5 +4473,7 @@ const comparisonRows = useMemo(
         )}
       </div>
     </div>
+    {horizonControlPortal}
+    </>
   );
 }
